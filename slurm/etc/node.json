@@ -1,0 +1,189 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.47.16.16243",
+      "templateHash": "11335838832324167611"
+    }
+  },
+  "parameters": {
+    "nodeName": {
+      "type": "string",
+      "metadata": {
+        "description": "Slurm node name; also the VM, computer and NIC name prefix"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure region of the Azure Local custom location (e.g. eastus)"
+      }
+    },
+    "customLocationId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the Azure Local custom location"
+      }
+    },
+    "logicalNetworkId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the Azure Local logical network"
+      }
+    },
+    "imageId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the Azure Local VM image (gallery image)"
+      }
+    },
+    "ipAddress": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Static IP for the node on the logical network. Empty = allocate from the logical network IP pool"
+      }
+    },
+    "processors": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "vCPUs (Slurm CPUs=)"
+      }
+    },
+    "memoryMB": {
+      "type": "int",
+      "defaultValue": 4096,
+      "metadata": {
+        "description": "Memory in MB (Slurm RealMemory= plus OS overhead)"
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "slurmadmin",
+      "metadata": {
+        "description": "Admin user created by cloud-init; used by the controller to bootstrap slurmd over SSH"
+      }
+    },
+    "sshPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH public key of the Slurm controller"
+      }
+    },
+    "storagePathId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional Azure Local storage path ID for VM files. Empty = platform default"
+      }
+    },
+    "enableGuestManagement": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Install the Arc guest agent (guest management). Not required for compute nodes and slows provisioning"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {}
+    }
+  },
+  "variables": {
+    "ipConfigProperties": "[union(createObject('subnet', createObject('id', parameters('logicalNetworkId'))), if(empty(parameters('ipAddress')), createObject(), createObject('privateIPAddress', parameters('ipAddress'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.AzureStackHCI/networkInterfaces",
+      "apiVersion": "2024-01-01",
+      "name": "[format('{0}-nic', parameters('nodeName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "extendedLocation": {
+        "type": "CustomLocation",
+        "name": "[parameters('customLocationId')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "[format('{0}-ipconfig', parameters('nodeName'))]",
+            "properties": "[variables('ipConfigProperties')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.HybridCompute/machines",
+      "apiVersion": "2025-01-13",
+      "name": "[parameters('nodeName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "kind": "HCI",
+      "identity": {
+        "type": "SystemAssigned"
+      }
+    },
+    {
+      "type": "Microsoft.AzureStackHCI/virtualMachineInstances",
+      "apiVersion": "2024-01-01",
+      "scope": "[resourceId('Microsoft.HybridCompute/machines', parameters('nodeName'))]",
+      "name": "default",
+      "extendedLocation": {
+        "type": "CustomLocation",
+        "name": "[parameters('customLocationId')]"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Custom",
+          "processors": "[parameters('processors')]",
+          "memoryMB": "[parameters('memoryMB')]"
+        },
+        "osProfile": {
+          "adminUsername": "[parameters('adminUsername')]",
+          "computerName": "[parameters('nodeName')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "provisionVMAgent": "[parameters('enableGuestManagement')]",
+            "provisionVMConfigAgent": "[parameters('enableGuestManagement')]",
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+              ]
+            }
+          }
+        },
+        "securityProfile": {
+          "enableTPM": false
+        },
+        "storageProfile": "[union(createObject('imageReference', createObject('id', parameters('imageId'))), if(empty(parameters('storagePathId')), createObject(), createObject('vmConfigStoragePathId', parameters('storagePathId'))))]",
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.AzureStackHCI/networkInterfaces', format('{0}-nic', parameters('nodeName')))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.HybridCompute/machines', parameters('nodeName'))]",
+        "[resourceId('Microsoft.AzureStackHCI/networkInterfaces', format('{0}-nic', parameters('nodeName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "vmId": {
+      "type": "string",
+      "value": "[extensionResourceId(resourceId('Microsoft.HybridCompute/machines', parameters('nodeName')), 'Microsoft.AzureStackHCI/virtualMachineInstances', 'default')]"
+    },
+    "nicId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.AzureStackHCI/networkInterfaces', format('{0}-nic', parameters('nodeName')))]"
+    }
+  }
+}

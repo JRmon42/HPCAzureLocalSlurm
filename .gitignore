@@ -1,0 +1,6 @@
+*.parameters.local.json
+*password*
+*.pem
+*.pfx
+.azure/
+

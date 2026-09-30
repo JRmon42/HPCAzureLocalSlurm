@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0063b1"/>
+    </marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c50f1f"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#107c10"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="820" fill="#ffffff"/>
+  <text x="640" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#1b1b1b">HPC on Azure Local with Slurm — elastic compute VMs provisioned per job</text>
+  <text x="640" y="54" text-anchor="middle" font-size="13" fill="#555">Slurm power saving (ResumeProgram / SuspendProgram) drives the Azure Local VM API through Azure Resource Manager</text>
+
+  <!-- ================= AZURE (control plane) ================= -->
+  <rect x="30" y="72" width="1220" height="200" rx="12" fill="#eaf3fc" stroke="#0078d4" stroke-width="2"/>
+  <text x="48" y="98" font-size="16" font-weight="600" fill="#0063b1">Microsoft Azure — control plane (resource group rg-hpc-azlocal-slurm)</text>
+
+  <rect x="60" y="116" width="230" height="130" rx="8" fill="#fff" stroke="#0078d4"/>
+  <text x="175" y="140" text-anchor="middle" font-weight="600">Microsoft Entra ID</text>
+  <text x="175" y="162" text-anchor="middle" font-size="12">Managed identity of the</text>
+  <text x="175" y="178" text-anchor="middle" font-size="12">Arc-enabled controller VM</text>
+  <text x="175" y="200" text-anchor="middle" font-size="12" fill="#555">RBAC on the RG:</text>
+  <text x="175" y="216" text-anchor="middle" font-size="12" fill="#555">"Azure Stack HCI VM Contributor"</text>
+  <text x="175" y="234" text-anchor="middle" font-size="11" fill="#777">no secret stored on the controller</text>
+
+  <rect x="330" y="116" width="260" height="130" rx="8" fill="#fff" stroke="#0078d4"/>
+  <text x="460" y="140" text-anchor="middle" font-weight="600">Azure Resource Manager</text>
+  <text x="460" y="162" text-anchor="middle" font-size="12">ARM deployment of node.json:</text>
+  <text x="460" y="180" text-anchor="middle" font-size="12" font-family="Consolas, monospace">AzureStackHCI/networkInterfaces</text>
+  <text x="460" y="196" text-anchor="middle" font-size="12" font-family="Consolas, monospace">HybridCompute/machines</text>
+  <text x="460" y="212" text-anchor="middle" font-size="12" font-family="Consolas, monospace">…/virtualMachineInstances</text>
+  <text x="460" y="234" text-anchor="middle" font-size="11" fill="#777">create · start · stop · delete</text>
+
+  <rect x="630" y="116" width="250" height="130" rx="8" fill="#fff" stroke="#0078d4"/>
+  <text x="755" y="140" text-anchor="middle" font-weight="600">Azure Local resources</text>
+  <text x="755" y="162" text-anchor="middle" font-size="12">Custom location "jumpstart"</text>
+  <text x="755" y="180" text-anchor="middle" font-size="12">Logical network (VLAN 200, static)</text>
+  <text x="755" y="198" text-anchor="middle" font-size="12">VM image slurm-ubuntu2404</text>
+  <text x="755" y="216" text-anchor="middle" font-size="12">Azure Local instance (cluster)</text>
+  <text x="755" y="234" text-anchor="middle" font-size="11" fill="#777">region: East US</text>
+
+  <rect x="920" y="116" width="300" height="130" rx="8" fill="#fff" stroke="#0078d4"/>
+  <text x="1070" y="140" text-anchor="middle" font-weight="600">Operations</text>
+  <text x="1070" y="162" text-anchor="middle" font-size="12">Arc Run Command → controller setup / tests</text>
+  <text x="1070" y="180" text-anchor="middle" font-size="12">Activity log = audit of every VM create/delete</text>
+  <text x="1070" y="198" text-anchor="middle" font-size="12">Tags: SlurmCluster / SlurmNode / ManagedBy</text>
+  <text x="1070" y="216" text-anchor="middle" font-size="12">Golden image built on an Azure VM</text>
+  <text x="1070" y="234" text-anchor="middle" font-size="11" fill="#777">(Marketplace Ubuntu 24.04 → NoCloud)</text>
+
+  <!-- ================= ON-PREMISES (Azure Local) ================= -->
+  <rect x="30" y="300" width="1220" height="440" rx="12" fill="#f3f9f1" stroke="#107c10" stroke-width="2"/>
+  <text x="48" y="326" font-size="16" font-weight="600" fill="#107c10">Customer datacenter — Azure Local instance (POC: Jumpstart LocalBox, 2 nested nodes)</text>
+
+  <rect x="200" y="340" width="190" height="120" rx="8" fill="#fff" stroke="#107c10"/>
+  <text x="295" y="362" text-anchor="middle" font-weight="600">Arc resource bridge</text>
+  <text x="295" y="382" text-anchor="middle" font-size="12">runs ARM operations of</text>
+  <text x="295" y="398" text-anchor="middle" font-size="12">the custom location on</text>
+  <text x="295" y="414" text-anchor="middle" font-size="12">the cluster: Hyper-V VM,</text>
+  <text x="295" y="430" text-anchor="middle" font-size="12">VHDX from image, vNIC</text>
+  <text x="295" y="450" text-anchor="middle" font-size="11" fill="#777">outbound HTTPS only</text>
+
+  <rect x="60" y="480" width="330" height="240" rx="8" fill="#fffbe6" stroke="#8a6d00" stroke-width="1.5"/>
+  <text x="225" y="504" text-anchor="middle" font-weight="600">Slurm controller VM "slurmctl"</text>
+  <text x="225" y="522" text-anchor="middle" font-size="12" fill="#555">192.168.200.10 · Arc agent (guest management)</text>
+  <text x="80" y="548" font-size="12">• slurmctld (configless, State=CLOUD nodes)</text>
+  <text x="80" y="568" font-size="12">• ResumeProgram  azlocal-resume.sh</text>
+  <text x="80" y="588" font-size="12">• SuspendProgram azlocal-suspend.sh</text>
+  <text x="80" y="608" font-size="12">• ResumeFailProgram / EpilogSlurmctld</text>
+  <text x="80" y="628" font-size="12">• az CLI + managed identity (himds)</text>
+  <text x="80" y="648" font-size="12">• munge key, SSH bootstrap key</text>
+  <text x="80" y="668" font-size="12">• NFS export /shared (home + job data)</text>
+  <text x="80" y="696" font-size="11" fill="#777">users: ssh → sbatch / srun / squeue</text>
+
+  <!-- compute VMs -->
+  <rect x="470" y="340" width="750" height="380" rx="8" fill="#fff" stroke="#107c10" stroke-dasharray="6 4"/>
+  <text x="845" y="364" text-anchor="middle" font-weight="600">Elastic compute VMs — exist only while jobs need them</text>
+  <text x="845" y="382" text-anchor="middle" font-size="12" fill="#555">Logical network VLAN 200 · static IP 192.168.200.(100+N) · size = Slurm CPUs / RealMemory</text>
+
+  <g>
+    <rect x="500" y="400" width="160" height="110" rx="8" fill="#e8f5e9" stroke="#107c10"/>
+    <text x="580" y="424" text-anchor="middle" font-weight="600">hpc-01</text>
+    <text x="580" y="444" text-anchor="middle" font-size="12">slurmd (configless)</text>
+    <text x="580" y="462" text-anchor="middle" font-size="12">munge · NFS /shared</text>
+    <text x="580" y="480" text-anchor="middle" font-size="12">OpenMPI</text>
+    <text x="580" y="498" text-anchor="middle" font-size="11" fill="#107c10">running job</text>
+  </g>
+  <g>
+    <rect x="680" y="400" width="160" height="110" rx="8" fill="#e8f5e9" stroke="#107c10"/>
+    <text x="760" y="424" text-anchor="middle" font-weight="600">hpc-02</text>
+    <text x="760" y="444" text-anchor="middle" font-size="12">slurmd (configless)</text>
+    <text x="760" y="462" text-anchor="middle" font-size="12">munge · NFS /shared</text>
+    <text x="760" y="480" text-anchor="middle" font-size="12">OpenMPI</text>
+    <text x="760" y="498" text-anchor="middle" font-size="11" fill="#107c10">running job</text>
+  </g>
+  <g>
+    <rect x="860" y="400" width="160" height="110" rx="8" fill="#f5f5f5" stroke="#999" stroke-dasharray="4 3"/>
+    <text x="940" y="424" text-anchor="middle" font-weight="600" fill="#777">hpc-03</text>
+    <text x="940" y="450" text-anchor="middle" font-size="12" fill="#777">powered down (idle~)</text>
+    <text x="940" y="468" text-anchor="middle" font-size="12" fill="#777">no VM, no NIC, no disk</text>
+    <text x="940" y="486" text-anchor="middle" font-size="12" fill="#777">zero footprint</text>
+  </g>
+  <g>
+    <rect x="1040" y="400" width="160" height="110" rx="8" fill="#f5f5f5" stroke="#999" stroke-dasharray="4 3"/>
+    <text x="1120" y="424" text-anchor="middle" font-weight="600" fill="#777">hpc-04</text>
+    <text x="1120" y="450" text-anchor="middle" font-size="12" fill="#777">powered down (idle~)</text>
+    <text x="1120" y="468" text-anchor="middle" font-size="12" fill="#777">no VM, no NIC, no disk</text>
+    <text x="1120" y="486" text-anchor="middle" font-size="12" fill="#777">zero footprint</text>
+  </g>
+
+  <!-- lifecycle legend inside compute box -->
+  <rect x="500" y="540" width="700" height="160" rx="8" fill="#fafafa" stroke="#ccc"/>
+  <text x="520" y="564" font-weight="600">Job lifecycle</text>
+  <text x="520" y="588" font-size="12"><tspan font-weight="600" fill="#0063b1">1</tspan>  sbatch → no node available → slurmctld calls ResumeProgram hpc-[01-02]</text>
+  <text x="520" y="608" font-size="12"><tspan font-weight="600" fill="#0063b1">2</tspan>  ResumeProgram: az login --identity → ARM deployment node.json (NIC + Arc machine + VM instance)</text>
+  <text x="520" y="628" font-size="12"><tspan font-weight="600" fill="#0063b1">3</tspan>  Arc resource bridge creates the Hyper-V VMs from the golden image (cloud-init: hostname, SSH key)</text>
+  <text x="520" y="648" font-size="12"><tspan font-weight="600" fill="#107c10">4</tspan>  Controller SSH bootstrap: munge key, NFS mount, slurmd --conf-server → node registers → job runs</text>
+  <text x="520" y="668" font-size="12"><tspan font-weight="600" fill="#c50f1f">5</tspan>  Job ends → EpilogSlurmctld: POWER_DOWN_ASAP (or SuspendTime idle) → SuspendProgram</text>
+  <text x="520" y="688" font-size="12"><tspan font-weight="600" fill="#c50f1f">6</tspan>  SuspendProgram deletes VM instance, Arc machine and NIC → capacity returned to Azure Local</text>
+
+  <!-- ================= ARROWS ================= -->
+  <!-- controller -> Entra (token) -->
+  <path d="M90,480 L90,256" stroke="#0063b1" stroke-width="2" fill="none" marker-end="url(#ab)"/>
+  <text x="84" y="470" font-size="11" fill="#0063b1" transform="rotate(-90 84 470)">token (MI)</text>
+  <!-- controller -> ARM (create/delete) -->
+  <path d="M160,480 L160,262 L400,262 L400,250" stroke="#0063b1" stroke-width="2" fill="none" marker-end="url(#ab)"/>
+  <text x="154" y="474" font-size="11" fill="#0063b1" transform="rotate(-90 154 474)">2 / 6  ARM create · delete</text>
+  <!-- ARM -> resource bridge -->
+  <path d="M520,246 L520,290 Q520,300 500,305 L330,338" stroke="#333" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <text x="530" y="292" font-size="11" fill="#333">custom location</text>
+  <!-- bridge -> compute -->
+  <path d="M390,420 L498,450" stroke="#333" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <text x="408" y="418" font-size="11" fill="#333">3 create</text>
+  <!-- controller -> compute bootstrap -->
+  <path d="M390,580 Q440,560 470,530 L520,512" stroke="#107c10" stroke-width="2" fill="none" marker-end="url(#ag)"/>
+  <text x="396" y="600" font-size="11" fill="#107c10">4 SSH bootstrap</text>
+  <text x="396" y="614" font-size="11" fill="#107c10">slurm RPC · NFS</text>
+
+  <!-- footer -->
+  <text x="40" y="770" font-size="12" fill="#555">Why not CycleCloud? Azure CycleCloud orchestrates Azure (public cloud) VM scale sets only — it has no Azure Local / Arc VM provider. The same elastic pattern is</text>
+  <text x="40" y="788" font-size="12" fill="#555">rebuilt here with Slurm's native power-saving hooks. CycleCloud remains an option to burst from this cluster to Azure regions (see docs/01-solution-overview.md).</text>
+</svg>
