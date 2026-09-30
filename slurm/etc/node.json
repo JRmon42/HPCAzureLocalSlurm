@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "11335838832324167611"
+      "templateHash": "11852041111010497518"
     }
   },
   "parameters": {
@@ -147,7 +147,7 @@
           "linuxConfiguration": {
             "disablePasswordAuthentication": true,
             "provisionVMAgent": "[parameters('enableGuestManagement')]",
-            "provisionVMConfigAgent": "[parameters('enableGuestManagement')]",
+            "provisionVMConfigAgent": true,
             "ssh": {
               "publicKeys": [
                 {

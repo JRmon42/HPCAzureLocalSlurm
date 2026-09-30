@@ -8,7 +8,7 @@
 | Why a node is down | `scontrol show node hpc-01` (`Reason=`) |
 | Provisioning log | `tail -f /var/log/slurm/azlocal-power.log` (one line per step, with durations) |
 | Slurm power events | `grep -i power /var/log/slurm/slurmctld.log` (`DebugFlags=Power`) |
-| VMs currently on Azure Local | `az stack-hci-vm list -g <rg> --query "[?tags.ManagedBy=='azlocal-slurm'].name"` |
+| VMs currently on Azure Local | `az resource list -g <rg> --resource-type Microsoft.HybridCompute/machines --tag ManagedBy=azlocal-slurm --query "[].name"` |
 | Force decommission | `scontrol update nodename=hpc-01 state=power_down_force` |
 | Pre-provision nodes before a campaign | `scontrol update nodename=hpc-[01-04] state=power_up` |
 | Keep nodes up (disable suspend) | `SuspendExcNodes=hpc-[01-02]` in slurm.conf, `scontrol reconfigure` |
@@ -44,6 +44,6 @@ sudo -u slurm /opt/azlocal-slurm/bin/azlocal-suspend.sh hpc-01   # deletes it
 | Parameter | POC value | Guidance |
 |---|---|---|
 | `ResumeTimeout` | 1800 s | ≥ 2 × measured VM create + boot + bootstrap |
-| `SuspendTimeout` | 600 s | ≥ measured delete time; node cannot be resumed before |
+| `SuspendTimeout` | 360 s | ≥ measured delete time (164–194 s in the POC); the node stays `idle%` (powering down) for this whole period and cannot be resumed before |
 | `SuspendTime` | 120 s | Short = frees capacity quickly; long = reuse VMs across a job burst |
 | `BOOTSTRAP_TIMEOUT` (azlocal.conf) | 1500 s | < `ResumeTimeout` |

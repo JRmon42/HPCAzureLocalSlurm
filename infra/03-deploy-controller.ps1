@@ -38,8 +38,8 @@ function Invoke-Az { $out = & az @args; if ($LASTEXITCODE) { throw "az $($args -
 
 $sub = Invoke-Az account show --query id -o tsv
 $cl = Invoke-Az customlocation show -g $ResourceGroup -n $CustomLocationName --query '{id:id,location:location}' -o json | ConvertFrom-Json
-$lnetId = Invoke-Az stack-hci-vm network lnet show -g $ResourceGroup -n $LogicalNetworkName --query id -o tsv
-$imageId = Invoke-Az stack-hci-vm image show -g $ResourceGroup -n $ImageName --query id -o tsv
+$lnetId = Invoke-Az stack-hci-vm network lnet show -g $ResourceGroup --name $LogicalNetworkName --query id -o tsv
+$imageId = Invoke-Az stack-hci-vm image show -g $ResourceGroup --name $ImageName --query id -o tsv
 $machineId = "/subscriptions/$sub/resourceGroups/$ResourceGroup/providers/Microsoft.HybridCompute/machines/$ControllerName"
 
 if ($Stage -in 'All', 'Vm') {

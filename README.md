@@ -38,6 +38,7 @@ in Azure.
 infra/
   00-prereqs.ps1              resource providers, resource group, scoped policy exemption
   01-deploy-localbox.ps1      POC only: Azure Local via Jumpstart LocalBox
+  01b-create-logical-network.ps1  POC only: VM logical network (LocalBox does not create one)
   02-build-golden-image.ps1   build Ubuntu+Slurm image on Azure, publish to Azure Local
   03-deploy-controller.ps1    controller VM, managed-identity RBAC, Slurm configuration (Arc Run Command)
   04-run-e2e.ps1              run the end-to-end test / ad-hoc commands on the controller
@@ -65,7 +66,8 @@ docs/                         documentation and diagrams
 $rg = 'rg-hpc-azlocal-slurm'
 ./infra/00-prereqs.ps1 -SubscriptionId <sub> -ResourceGroup $rg
 ./infra/01-deploy-localbox.ps1 -ResourceGroup $rg -TenantId <tenant> -AdminPassword (Read-Host -AsSecureString)  # POC only
-./infra/02-build-golden-image.ps1 -ResourceGroup $rg          # after Azure Local is ready
+./infra/01b-create-logical-network.ps1 -ResourceGroup $rg     # POC only, once the custom location is ready
+./infra/02-build-golden-image.ps1 -ResourceGroup $rg          # after Azure Local is ready (Build + Publish + Cleanup)
 ./infra/03-deploy-controller.ps1 -ResourceGroup $rg
 ./infra/04-run-e2e.ps1 -ResourceGroup $rg
 ```

@@ -97,7 +97,7 @@ resource vm 'Microsoft.AzureStackHCI/virtualMachineInstances@2024-01-01' = {
       linuxConfiguration: {
         disablePasswordAuthentication: true
         provisionVMAgent: enableGuestManagement
-        provisionVMConfigAgent: enableGuestManagement
+        provisionVMConfigAgent: true
         ssh: {
           publicKeys: [
             {

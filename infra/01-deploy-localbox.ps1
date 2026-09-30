@@ -3,7 +3,7 @@
 .SYNOPSIS
   Deploys an Azure Local instance for the POC with Jumpstart LocalBox
   (2-node Azure Local cluster nested in one Azure VM, Arc resource bridge,
-  custom location 'jumpstart', logical network 'localbox-vm-lnet-vlan200').
+  custom location 'jumpstart'). The VM logical network is created afterwards by 01b-create-logical-network.ps1.
 
 .DESCRIPTION
   For a real customer, skip this script: use the existing Azure Local instance and pass its
@@ -64,6 +64,6 @@ Write-Host @'
     Follow progress with:
       az stack-hci cluster list -g <rg> -o table          (cluster resource + status)
       az customlocation list -g <rg> -o table              (ready when 'jumpstart' exists)
-      az stack-hci-vm network lnet list -g <rg> -o table   (logical network for the VMs)
+    When 'jumpstart' is Succeeded, run ./infra/01b-create-logical-network.ps1 (LocalBox creates no VM network).
     Logs on the host: C:\LocalBox\Logs\*.log
 '@

@@ -4,9 +4,9 @@ All scripts are PowerShell 7 (Windows, Linux or macOS) calling Azure CLI ≥ 2.6
 `slurm/` and `image/` run on Linux VMs and are delivered by the PowerShell scripts.
 
 ```text
-00-prereqs.ps1 ─► 01-deploy-localbox.ps1 ─► (Azure Local ready) ─► 02-build-golden-image.ps1 ─► 03-deploy-controller.ps1 ─► 04-run-e2e.ps1
-   RPs, RG,          POC only: nested            ~3-6 h                 Build (Azure VM)            controller VM + MI RBAC        submit jobs,
-   exemption         Azure Local                                        + Publish to Azure Local    + Slurm config (Run Command)   verify create/delete
+00-prereqs ─► 01-deploy-localbox ─► (Azure Local ready) ─► 01b-create-logical-network ─► 02-build-golden-image ─► 03-deploy-controller ─► 04-run-e2e
+ RPs, RG,      POC only: nested       ~3-6 h                 VM network (VLAN 200)          Build (Azure VM)          controller VM + MI RBAC   submit jobs,
+ exemption     Azure Local                                                                   + Publish to Azure Local  + Slurm config            verify create/delete
 ```
 
 ## Prerequisites
@@ -44,12 +44,26 @@ account accessed with its key and a reachable Key Vault.
 ```
 
 * The ARM part takes ~15 min; then the `LocalBox-Client` VM logs on automatically and builds the 2-node
-  cluster, registers it in Azure, deploys the Arc resource bridge, the custom location `jumpstart` and
-  the logical network `localbox-vm-lnet-vlan200` (3–6 hours). Logs: `C:\LocalBox\Logs` on the host VM.
+  cluster, registers it in Azure, deploys the Arc resource bridge and the custom location `jumpstart`
+  (3–6 hours; ~4 h in the POC). Logs: `C:\LocalBox\Logs` on the host VM. Progress of the 56 deployment
+  sub-steps: `GET .../clusters/localboxcluster/deploymentSettings/default?api-version=2024-04-01`
+  → `properties.reportedProperties.deploymentStatus`.
 * `AzureLocalInstanceLocation` must be a region supported by Azure Local (e.g. `eastus`, `westeurope`,
   `australiaeast`…). In the POC tenant West Europe is blocked by policy, hence `eastus`.
-* Ready when: `az customlocation show -g $rg -n jumpstart` and
-  `az stack-hci-vm network lnet show -g $rg -n localbox-vm-lnet-vlan200` both return `Succeeded`.
+* Ready when `az customlocation show -g $rg -n jumpstart --query provisioningState` returns `Succeeded`.
+
+### Step 1b – VM logical network
+
+LocalBox does **not** create a logical network for Arc VMs. Create it once the custom location is ready:
+
+```powershell
+./infra/01b-create-logical-network.ps1 -ResourceGroup $rg     # VLAN 200, 192.168.200.0/24, static, ~1 min
+```
+
+Static allocation **without an IP pool**: the controller and every compute NIC carry an explicit IP
+(`192.168.200.10`, `192.168.200.1NN`), so Slurm node names map deterministically to addresses.
+The vSwitch name of LocalBox is `ConvergedSwitch(compute_management)`; the gateway `.1` is the NAT on the
+LocalBox host and DNS `192.168.1.254` the LocalBox domain controller.
 
 **Customer environment:** skip this step and pass your own `-CustomLocationName` / `-LogicalNetworkName`
 to the next scripts. Reserve a static IP for the controller and a range for the compute nodes on the
@@ -67,8 +81,14 @@ Build creates a temporary Ubuntu 24.04 Azure VM (no inbound access), runs
 [`image/prepare-slurm-image.sh`](../image/prepare-slurm-image.sh) through Run Command, generalizes it for
 Azure Local (cloud-init `NoCloud` datasource, per the
 [Azure Local Ubuntu image guidance](https://learn.microsoft.com/azure/azure-local/manage/virtual-machine-azure-marketplace-ubuntu))
-and deallocates it. Publish creates a read SAS on the OS disk and imports it with
-`az stack-hci-vm image create --image-path <SAS>`.
+and deallocates it (~20 min). Publish copies the OS disk to a **page blob in a temporary storage account**
+(`az storage blob copy start` from a disk SAS, ~12 min for 32 GB) and imports it with
+`az stack-hci-vm image create --image-path <blob SAS>` (~50 min in the nested POC). Cleanup deletes the
+builder VM, its disk and the staging storage account.
+
+> Importing directly from the managed-disk SAS (`md-*.blob.storage.azure.net`) fails on Azure Local
+> with `500 OperationTimedOut`; staging in a regular blob avoids it. Note the property returned by
+> `az disk grant-access` is `accessSAS` (case-sensitive in `--query`).
 
 ## Step 3 – Slurm controller
 
@@ -98,7 +118,8 @@ Change node shapes by editing `-NodeCpus/-NodeRealMemoryMB` (or `NodeName=` line
 Uploads [`tests/`](../tests) to the controller, and runs [`tests/e2e-test.sh`](../tests/e2e-test.sh) which, for
 `hello.sbatch` (2 nodes × 2 tasks) and `mpi.sbatch` (OpenMPI ring over 4 ranks):
 submits the job as `hpcuser` → checks that the VMs appear in Azure while it runs → waits for completion →
-checks that the VMs are deleted and nodes return to `idle~`. Prints timings and `E2E-PASS`.
+checks that the VMs are deleted and the nodes are powered down (`idle%` until `SuspendTimeout`, then `idle~`).
+Prints timings and `E2E-PASS`. Takes ~25 min for the two jobs.
 
 Ad-hoc commands on the controller (no inbound connectivity needed):
 

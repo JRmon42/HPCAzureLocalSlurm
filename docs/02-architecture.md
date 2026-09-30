@@ -88,6 +88,7 @@ stateDiagram-v2
 | **SSH bootstrap** from the controller (not cloud-init user data) | The Azure Local VM instance API version used (`2024-01-01`) exposes no custom-data/user-data field; in addition the munge secret then never leaves the local network and never appears in ARM |
 | **Deterministic static IPs** (`hpc-NN` → `.100+NN`) | Stable `/etc/hosts` for MPI peers and simple firewalling; pool allocation also supported (empty `NODE_IP_BASE`) |
 | `SlurmctldParameters=cloud_reg_addrs,idle_on_node_suspend` + `CommunicationParameters=NoAddrCache` | Node address learned at registration; failed nodes become schedulable again after cleanup |
+| `SuspendTimeout=360` | Slurm keeps a node `POWERING_DOWN` (`idle%`) for the full `SuspendTimeout`, whatever the real delete time; 360 s ≈ 2 × the measured 164–194 s |
 | `ResumeTimeout=1800` | VM creation on Azure Local copies the image VHDX; 30 min covers slow storage (see measured values in [05-poc-results.md](05-poc-results.md)) |
 | Lifecycle **ephemeral** by default, **persistent** optional | Ephemeral = zero footprint when idle, clean node every time; persistent = faster start (VM start/stop), disks kept |
 | Guest management (Arc agent) only on the controller | Needed for its managed identity and Run Command; compute nodes do not need it and boot faster without it |

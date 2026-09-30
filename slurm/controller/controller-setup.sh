@@ -26,6 +26,17 @@ install -m 0640 -o root -g slurm "$BUNDLE_DIR/azlocal.conf" "$CONF_DIR/azlocal.c
 chown slurm:slurm /var/log/slurm /var/spool/slurmctld
 touch /var/log/slurm/azlocal-power.log && chown slurm:slurm /var/log/slurm/azlocal-power.log
 
+echo "==> slurm.conf"
+sed -e "s|__CLUSTER_NAME__|$CLUSTER_NAME|g" \
+    -e "s|__CONTROLLER_NAME__|$CONTROLLER_NAME|g" \
+    -e "s|__CONTROLLER_IP__|$CONTROLLER_IP|g" \
+    -e "s|__NODE_RANGE__|$NODE_RANGE|g" \
+    -e "s|__NODE_CPUS__|$NODE_CPUS|g" \
+    -e "s|__NODE_MEMORY__|$NODE_MEMORY|g" \
+    -e "s|__SUSPEND_TIME__|$SUSPEND_TIME|g" \
+    "$BUNDLE_DIR/etc/slurm.conf.tpl" >/etc/slurm/slurm.conf
+chmod 0644 /etc/slurm/slurm.conf
+
 echo "==> Name resolution"
 sed -i "/[[:space:]]$CONTROLLER_NAME\$/d" /etc/hosts
 echo "$CONTROLLER_IP $CONTROLLER_NAME" >>/etc/hosts
@@ -69,17 +80,6 @@ chmod 1777 /shared/jobs
 grep -q '^/shared ' /etc/exports || echo "/shared $NFS_CLIENTS(rw,sync,no_subtree_check,no_root_squash)" >>/etc/exports
 systemctl enable --now nfs-kernel-server
 exportfs -ra
-
-echo "==> slurm.conf"
-sed -e "s|__CLUSTER_NAME__|$CLUSTER_NAME|g" \
-    -e "s|__CONTROLLER_NAME__|$CONTROLLER_NAME|g" \
-    -e "s|__CONTROLLER_IP__|$CONTROLLER_IP|g" \
-    -e "s|__NODE_RANGE__|$NODE_RANGE|g" \
-    -e "s|__NODE_CPUS__|$NODE_CPUS|g" \
-    -e "s|__NODE_MEMORY__|$NODE_MEMORY|g" \
-    -e "s|__SUSPEND_TIME__|$SUSPEND_TIME|g" \
-    "$BUNDLE_DIR/etc/slurm.conf.tpl" >/etc/slurm/slurm.conf
-chmod 0644 /etc/slurm/slurm.conf
 
 echo "==> Checking Azure login as SlurmUser"
 sudo -u slurm -H bash -c "source $INSTALL_DIR/bin/azlocal-common.sh && az_login && az account show --query '{sub:id,user:user.name}' -o tsv"

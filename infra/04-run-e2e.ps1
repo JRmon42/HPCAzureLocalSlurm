@@ -20,20 +20,34 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $location = az connectedmachine show -g $ResourceGroup -n $ControllerName --query location -o tsv
 if (-not $location) { throw "Controller $ControllerName not found" }
 
-function Invoke-ControllerScript([string] $Script, [int] $TimeoutSec = 600) {
+function Invoke-ControllerScriptOnce([string] $Script, [int] $TimeoutSec) {
     $f = New-TemporaryFile
     [IO.File]::WriteAllText($f, "#!/bin/bash`n" + ($Script -replace "`r`n", "`n"))
     $name = "rc-$(Get-Date -Format yyyyMMddHHmmssfff)"
-    az connectedmachine run-command create -g $ResourceGroup --machine-name $ControllerName --location $location `
-        --name $name --script "@$f" --timeout-in-seconds $TimeoutSec -o none
-    $r = az connectedmachine run-command show -g $ResourceGroup --machine-name $ControllerName --name $name `
-        --query '{out:instanceView.output,err:instanceView.error,exit:instanceView.exitCode}' -o json | ConvertFrom-Json
-    az connectedmachine run-command delete -g $ResourceGroup --machine-name $ControllerName --name $name --yes --no-wait -o none 2>$null
-    Remove-Item $f
-    if ($r.err) { Write-Verbose $r.err }
-    $r.out
+    try {
+        az connectedmachine run-command create -g $ResourceGroup --machine-name $ControllerName --location $location `
+            --name $name --script "@$f" --timeout-in-seconds $TimeoutSec -o none
+        if ($LASTEXITCODE) { throw "run-command create failed ($LASTEXITCODE)" }
+        $json = az connectedmachine run-command show -g $ResourceGroup --machine-name $ControllerName --name $name `
+            --query '{out:instanceView.output,err:instanceView.error,exit:instanceView.exitCode}' -o json
+        if ($LASTEXITCODE -or -not $json) { throw "run-command show failed ($LASTEXITCODE)" }
+        $r = $json | ConvertFrom-Json
+        az connectedmachine run-command delete -g $ResourceGroup --machine-name $ControllerName --name $name --yes --no-wait -o none 2>$null
+        if ($r.err) { Write-Verbose $r.err }
+        return $r.out
+    } finally { Remove-Item $f -ErrorAction SilentlyContinue }
 }
 
+# Retries transient ARM/Entra errors (e.g. DNS hiccups on login.microsoftonline.com)
+function Invoke-ControllerScript([string] $Script, [int] $TimeoutSec = 600, [int] $Retries = 3) {
+    for ($i = 1; ; $i++) {
+        try { return Invoke-ControllerScriptOnce $Script $TimeoutSec }
+        catch {
+            if ($i -ge $Retries) { throw }
+            Write-Warning "Run command attempt $i failed: $_ - retrying in 30s"; Start-Sleep 30
+        }
+    }
+}
 if ($Command) { Invoke-ControllerScript $Command; return }
 
 Write-Host '==> Uploading tests and starting e2e-test.sh on the controller'
@@ -64,6 +78,6 @@ do {
     if ($content -ne $last) { Write-Host "----- $(Get-Date -Format HH:mm:ss)"; $content | Write-Host; $last = $content }
 } until ($content -match 'E2E-(PASS|FAIL)' -or (Get-Date) -gt $deadline)
 Write-Host '==> Summary'
-Invoke-ControllerScript "grep -E '^(RESULT|=== E2E|E2E-)|RUNNING after|decommissioned in|VMs during job' $log" | Write-Host
+Invoke-ControllerScript "grep -E '^(RESULT|=== E2E|E2E-)|VMs present|deleted .*after job end|provisioning wait|decommissioned in' $log" | Write-Host
 Write-Host "Full log on the controller: $log"
 if ($content -notmatch 'E2E-PASS') { throw 'E2E test did not pass' }

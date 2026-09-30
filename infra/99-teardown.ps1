@@ -20,13 +20,15 @@ if ($Scope -eq 'All') {
     return
 }
 
-$names = az stack-hci-vm list -g $ResourceGroup --query "[?tags.ManagedBy=='azlocal-slurm' || starts_with(name,'hpc-')].name" -o tsv
+$names = az resource list -g $ResourceGroup --resource-type Microsoft.HybridCompute/machines `
+    --query '[].{n:name,m:tags.ManagedBy}' -o json | ConvertFrom-Json |
+    Where-Object { $_.m -eq 'azlocal-slurm' } | ForEach-Object n
 if ($Scope -eq 'Slurm') { $names = @($names) + $ControllerName }
 foreach ($n in $names | Where-Object { $_ }) {
     Write-Host "==> Deleting VM $n"
-    az stack-hci-vm delete -g $ResourceGroup -n $n --yes -o none
-    az stack-hci-vm network nic delete -g $ResourceGroup -n "$n-nic" --yes -o none 2>$null
+    az stack-hci-vm delete -g $ResourceGroup --name $n --yes -o none
+    az stack-hci-vm network nic delete -g $ResourceGroup --name "$n-nic" --yes -o none 2>$null
 }
 if ($Scope -eq 'Slurm') {
-    az stack-hci-vm image delete -g $ResourceGroup -n $ImageName --yes -o none
+    az stack-hci-vm image delete -g $ResourceGroup --name $ImageName --yes -o none
 }

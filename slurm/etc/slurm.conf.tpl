@@ -45,7 +45,7 @@ EpilogSlurmctld=/opt/azlocal-slurm/bin/azlocal-epilog-slurmctld.sh
 # Idle seconds before a VM is decommissioned (POWER_DOWN_AFTER_JOB makes it immediate)
 SuspendTime=__SUSPEND_TIME__
 # Max seconds for the SuspendProgram (VM delete) before the node can be resumed again
-SuspendTimeout=600
+SuspendTimeout=360
 # Max seconds from ResumeProgram start until slurmd registers (VM create + boot + bootstrap)
 ResumeTimeout=1800
 ResumeRate=0
