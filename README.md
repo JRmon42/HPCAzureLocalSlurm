@@ -31,6 +31,7 @@ in Azure.
 | [04 – Operations](docs/04-operations.md) | Day-2 commands, troubleshooting, timeouts |
 | [05 – POC results](docs/05-poc-results.md) | What was deployed, test evidence, measured provisioning/decommissioning times |
 | [06 – Production considerations](docs/06-production-considerations.md) | HA, performance, GPU, identity, image pipeline, limitations |
+| [07 – Sharing with OCR workloads](docs/07-coexistence-ocr-workloads.md) | "Qwen for OCR" clarification; using left-over capacity without preempting OCR (options A/B/C) |
 
 ## Repository layout
 
