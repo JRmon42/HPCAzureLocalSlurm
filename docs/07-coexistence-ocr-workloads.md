@@ -1,5 +1,9 @@
 # 7. Sharing Azure Local with OCR workloads (Qwen) — clarification and options
 
+> **Update:** the customer answered (OCR with Qwen-VL, scheduled at night, no arbitration needed, 8 GPUs
+> in DDA). The options below are kept as background; the retained design is in
+> [08 – OCR GPU night window](08-ocr-gpu-night-window.md).
+
 ## What the requirement most likely means
 
 | What was heard | Most likely meaning |
