@@ -33,16 +33,20 @@ or to any other VM during the day, without manual action.
 
 ### 1. Night window in Slurm
 
-* Partition `ocr` with the GPU nodes (`NodeName=gpu-[01-08] State=CLOUD Gres=gpu:rtx6000:1 ...`,
-  `gres.conf` `Name=gpu Type=rtx6000 File=/dev/nvidia0`).
-* **Window**: a daily recurring reservation for the OCR account, for example
-  `scontrol create reservation ReservationName=ocr_night Accounts=ocr Nodes=gpu-[01-08] StartTime=20:00:00 Duration=10:00:00 Flags=DAILY`
-  (or a QOS). Researchers' jobs keep their own partition and are not affected.
-* **Jobs must fit the window**: `MaxTime` on the partition (for example 9 h). Slurm does not start a job whose
-  time limit would overlap the end of the window if a day reservation exists for the same nodes.
-* **Pre-warm** (optional): the VMs take about 4–5 min to start (see [05](05-poc-results.md)) plus the model
-  load time. A cron at 19:45 runs `scontrol update NodeName=gpu-[01-08] State=POWER_UP` so the first job
-  does not wait. `SuspendTime` powers the VMs down after the last job.
+A reservation *for* the OCR account does **not** keep others out of the GPUs, and does not stop the OCR
+account from running by day. The correct mechanism is the opposite: block the **closed** hours.
+
+* Partition `ocr` with the GPU nodes (`NodeName=gpu-[01-08] State=CLOUD Gres=gpu:rtx6000:1 ...`).
+* **Window**: a daily recurring **blocking reservation owned by `root`** on `gpu-[01-08]` covering the
+  closed hours (06:00 → 20:00). While it is active nobody else can start a job on these nodes; Slurm also
+  refuses to start a job whose time limit would run into its next occurrence. Jobs submitted by day simply
+  wait `Pending` and start when the window opens. Implemented by
+  [`slurm/bin/azlocal-ocr-window.sh`](../slurm/bin/azlocal-ocr-window.sh) (`apply`).
+* **Jobs must fit the window**: partition `MaxTime` = window length (10 h for 20:00–06:00).
+* The researchers' own jobs keep their own partition/nodes; only the GPU nodes are windowed.
+* **Pre-warm** (optional, `OCR_PREWARM_MIN`): the VMs take ~4–5 min to start (see [05](05-poc-results.md))
+  plus the model load time. A cron before opening runs `scontrol update NodeName=gpu-[01-08] State=POWER_UP`.
+  Note that `SuspendTime` still applies to nodes that stay idle, so set it above the pre-warm lead time.
 * If OCR is currently submitted with `sbatch --begin=20:00` or by cron, that continues to work.
 
 ### 2. GPU details
@@ -50,11 +54,11 @@ or to any other VM during the day, without manual action.
 * Creating a VM with a GPU: `az stack-hci-vm create … --gpus GpuDDA` (documented), or
   `az stack-hci-vm gpu attach --gpus GpuDDA` on an existing, stopped VM
   ([Manage GPUs via DDA](https://learn.microsoft.com/azure/azure-local/manage/gpu-manage-via-device)).
-  The Azure Local scheduler places the VM on a host with a free GPU.
-* **To add to this repo** (not yet implemented or tested: the POC runs on LocalBox, which has no GPU): a
-  `gpus` parameter in `node.bicep` / `azlocal-resume.sh` for the GPU partition of the node pool, and the
-  image `image/prepare-slurm-image.sh` with the **NVIDIA driver + CUDA**, `nvidia-container-toolkit` if
-  containers are used, and `vllm` or the customer's inference stack. **Model weights stay on the shared
+  The Azure Local scheduler places the VM on a host with a free GPU. In ARM the VM instance exposes
+  `hardwareProfile.virtualMachineGPUs[] {assignmentType: GpuDDA, gpuName, partitionSizeMB}`
+  (API `2024-05-01-preview` and later). `node.bicep` now has a `gpus` parameter for it.
+* Still to do for production (see section 4): image with the NVIDIA driver, `AutoDetect=nvml`,
+  Qwen-VL stack and model weights. **Model weights stay on the shared
   storage** (NFS or equivalent), not in the image, so the image stays small and the VM starts quickly.
 * **Supported models**: *NVIDIA RTX PRO 6000* is on the supported list for DDA with Arc VMs and AKS. The
   older *Quadro RTX 6000* and *RTX 6000 Ada* are **not listed**. **Confirm the exact model** and check it in the
@@ -73,7 +77,60 @@ Azure Local over SSH and the Slurm ports (slurmctld 6817, slurmd 6818, plus the 
 server** (managed identity) or a **service principal with a certificate** (`AZ_AUTH=sp`) with the role
 *Azure Stack HCI VM Contributor* on the resource group. No controller VM is needed on Azure Local.
 
-## Migration path from today
+## POC status: implemented, simulated, not implemented
+
+Tested on the POC (RG `rg-hpc-azlocal-slurm`, LocalBox, **no physical GPU**).
+
+| Item | Status | Detail |
+|---|---|---|
+| `ocr` partition, nodes `gpu-[01-08]` (`State=CLOUD`, `Gres=gpu:rtx6000:1`), `--gres=gpu:1` scheduling | **Implemented and tested** | `slurm/etc/slurm.gpu.conf.tpl`, rendered by `controller-setup.sh` |
+| Elastic lifecycle for GPU nodes (VM created at job start, deleted at job end, static IP 192.168.200.11x) | **Implemented and tested** | Same Resume/Suspend programs; `GPU_IP_BASE` in `azlocal.conf` |
+| Night window (daily blocking reservation, jobs wait Pending, VMs created only when it opens) | **Implemented and tested** | `slurm/bin/azlocal-ocr-window.sh`; see test below |
+| Node hooks run before slurmd registers (`/shared/hooks.d/<class>/*.sh`, class = `all` or the node prefix, e.g. `gpu`) | **Implemented and tested** | POC hook installs tesseract on GPU nodes only; production hook = driver check + model mount |
+| OCR demo job (documents in `/shared/ocr/in` → text in `/shared/ocr/out`) | **Implemented and tested** with tesseract | `tests/ocr-demo.sbatch`; real OCR output, same Slurm shape as Qwen-VL |
+| Pre-warm before the window | Implemented (`OCR_PREWARM_MIN` + cron), **not exercised** | |
+| `gpus` parameter (DDA) in `node.bicep` / resume script (`GPU_DDA_ENABLE`) | **Implemented, deployed empty only** | Template compiled with API `2024-05-01-preview`, regression-tested with no GPU. Attaching a GPU could not be tested |
+| NVIDIA driver + CUDA in the image (`INSTALL_NVIDIA=1`) | **Written, not built** | No GPU to validate the driver against |
+| GPU in Slurm | **Simulated** | `gres.conf`: `File=/dev/null`. Scheduling and accounting are identical to a real GPU; no CUDA device exists |
+| Qwen-VL inference | **Not implemented** | Needs a real GPU; the demo uses tesseract on CPU |
+| Controller on-prem (Arc server identity) | **Not implemented** | The POC controller is itself an Azure Local VM |
+
+Test run (Slurm clock UTC; window opened by a 7-minute test block):
+
+| Step | Result |
+|---|---|
+| `ocr_closed_daily` created by `apply` | `Flags=IGNORE_JOBS,DAILY`, next start 06:00 for 14 h; a one-shot covers the rest of the current closed period |
+| Job submitted while blocked | `PENDING (ReqNodeNotAvail, May be reserved for other job)`; **no VM created** |
+| Window opens 12:47:46 | ResumeProgram starts at once (gpu-01, 192.168.200.111) |
+| VM ready / bootstrap incl. hook | 343 s / 461 s after the window opened |
+| OCR job | 3 documents OCR'd on `gpu-01`; ends 12:55:56 |
+| Decommissioning | epilog → `power_down_asap` → suspend program deletes the VM |
+
+## Production: how to complete what is missing
+
+1. **GPU model**: confirm the card. Arc VM DDA lists T4, A2, A16, L4, L40, L40S and RTX PRO 6000; an older
+   Quadro RTX 6000 or an RTX 6000 Ada is not listed. Enable IOMMU/SR-IOV, dismount the GPUs from the
+   hosts following [Manage GPUs via DDA](https://learn.microsoft.com/azure/azure-local/manage/gpu-manage-via-device),
+   and read the exact `gpuName` with `az stack-hci-vm gpu list`.
+2. **Enable DDA in the scripts**: in `azlocal.conf` set `GPU_DDA_ENABLE="true"` and `GPU_DDA_NAME="<gpuName>"`;
+   Resume then passes `gpus=[{"assignmentType":"GpuDDA",...}]` (one per `Gres` GPU). First test with 1 node.
+3. **GPU image**: `INSTALL_NVIDIA=1 image/prepare-slurm-image.sh`, publish as `slurm-ubuntu2404-gpu`, set
+   `IMAGE_ID` for the GPU nodes (or use one image for everything). Check `nvidia-smi` in the VM.
+4. **Real GRES**: rebuild with `-GpuGresMode nvml` (`AutoDetect=nvml`; Slurm must be built with NVML),
+   or list `File=/dev/nvidia0` in `gres.conf`. Remove the simulation (`File=/dev/null`).
+5. **Qwen-VL**: replace the `ocr` function in the job with the inference call (vLLM or transformers). Keep
+   weights on shared storage and mount them in the hook `slurm/hooks/gpu/10-ocr-tools.sh`; add the Python environment to the image
+   or a container (Apptainer/Enroot, `nvidia-container-toolkit`).
+6. **On-prem controller**: the existing Slurm controller must reach ARM (HTTPS out) and the VM network
+   (SSH 22, 6817/6818, NFS). Give it an identity (Arc-enable the server and keep `AZ_AUTH=msi`, or
+   `AZ_AUTH=sp` with a certificate) with *Azure Stack HCI VM Contributor* on the resource group, install the
+   bundle with `controller-setup.sh`, and replace NFS `/shared` by the customer's storage.
+7. **Window**: `OCR_OPEN_START/END`, partition `MaxTime` ≤ window; `azlocal-ocr-window.sh apply` once (the
+   reservation recurs daily and survives restarts; re-run after any `scontrol reconfigure` that drops it).
+   Set `OCR_PREWARM_MIN` (≥ 10) and `SuspendTime` above it if the first job must not wait.
+8. **Day-time GPU use**: if researchers use these GPUs by day, they must run in VMs created by Azure Local
+   outside Slurm; DDA GPUs are exclusive, so a VM needs a free GPU at creation time. Slurm does not see them.
+
 
 1. **Today**: on-prem VMs, Slurm schedules OCR at night. No change.
 2. **Pilot**: add the partition `ocr-azlocal` with 1–2 GPU nodes in Azure Local (this repo +

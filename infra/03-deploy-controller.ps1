@@ -28,6 +28,16 @@ param(
     [int]    $NodeIpBase = 100,
     [string] $NfsClients = '192.168.200.0/24',
     [int]    $SuspendTime = 120,
+    [string] $GpuNodeRange = 'gpu-[01-08]',
+    [int]    $GpuNodeCpus = 2,
+    [int]    $GpuNodeRealMemoryMB = 3500,
+    [string] $GpuType = 'rtx6000',
+    [int]    $GpuIpBase = 110,
+    [ValidateSet('sim', 'nvml')] [string] $GpuGresMode = 'sim',
+    [switch] $GpuDda,
+    [string] $OcrOpenStart = '20:00',
+    [string] $OcrOpenEnd = '06:00',
+    [string] $OcrMaxTime = '10:00:00',
     [ValidateSet('ephemeral', 'persistent')] [string] $Lifecycle = 'ephemeral',
     [string] $SshPublicKeyFile = (Join-Path $HOME '.ssh/id_rsa.pub'),
     [ValidateSet('All', 'Vm', 'Rbac', 'Configure')] [string] $Stage = 'All'
@@ -92,14 +102,19 @@ if ($Stage -in 'All', 'Configure') {
     $work = Join-Path ([IO.Path]::GetTempPath()) "azlocal-bundle-$(Get-Random)"
     New-Item -ItemType Directory -Path "$work/bundle/bin", "$work/bundle/etc" | Out-Null
     Copy-Item "$repoRoot/slurm/bin/*.sh" "$work/bundle/bin/"
-    Copy-Item "$repoRoot/slurm/etc/slurm.conf.tpl", "$repoRoot/slurm/etc/node.json" "$work/bundle/etc/"
+    Copy-Item "$repoRoot/slurm/etc/slurm.conf.tpl", "$repoRoot/slurm/etc/slurm.gpu.conf.tpl", "$repoRoot/slurm/etc/node.json" "$work/bundle/etc/"
+    New-Item -ItemType Directory "$work/bundle/hooks/gpu" -Force | Out-Null
+    Copy-Item "$repoRoot/slurm/hooks/gpu/*.sh" "$work/bundle/hooks/gpu/"
     Copy-Item "$repoRoot/slurm/controller/controller-setup.sh" "$work/bundle/"
     $conf = (Get-Content "$repoRoot/slurm/etc/azlocal.conf.tpl" -Raw) `
         -replace '__SUBSCRIPTION_ID__', $sub -replace '__RESOURCE_GROUP__', $ResourceGroup `
         -replace '__LOCATION__', $cl.location -replace '__CUSTOM_LOCATION_ID__', $cl.id `
         -replace '__LOGICAL_NETWORK_ID__', $lnetId -replace '__IMAGE_ID__', $imageId `
         -replace '__CONTROLLER_IP__', $ControllerIp -replace '__NODE_IP_PREFIX__', $NodeIpPrefix `
-        -replace '__NODE_IP_BASE__', $NodeIpBase -replace 'LIFECYCLE="ephemeral"', "LIFECYCLE=`"$Lifecycle`""
+        -replace '__NODE_IP_BASE__', $NodeIpBase -replace 'LIFECYCLE="ephemeral"', "LIFECYCLE=`"$Lifecycle`"" `
+        -replace '__GPU_IP_BASE__', $GpuIpBase -replace '__GPU_DDA_ENABLE__', $(if ($GpuDda) { 'true' } else { 'false' }) `
+        -replace '__GPU_NODE_RANGE__', $GpuNodeRange -replace '__OCR_OPEN_START__', $OcrOpenStart `
+        -replace '__OCR_OPEN_END__', $OcrOpenEnd
     # Bash files must keep LF line endings
     Get-ChildItem $work -Recurse -File | ForEach-Object {
         $t = (Get-Content $_.FullName -Raw) -replace "`r`n", "`n"; [IO.File]::WriteAllText($_.FullName, $t)
@@ -115,7 +130,8 @@ rm -rf /tmp/azlocal-bundle && mkdir -p /tmp/azlocal-bundle
 echo '$b64' | base64 -d | tar -xzf - -C /tmp/azlocal-bundle
 export BUNDLE_DIR=/tmp/azlocal-bundle CLUSTER_NAME='$ClusterName' CONTROLLER_NAME='$ControllerName' \
   CONTROLLER_IP='$ControllerIp' NODE_RANGE='$NodeRange' NODE_CPUS='$NodeCpus' NODE_MEMORY='$NodeRealMemoryMB' \
-  SUSPEND_TIME='$SuspendTime' NFS_CLIENTS='$NfsClients'
+  SUSPEND_TIME='$SuspendTime' NFS_CLIENTS='$NfsClients' GPU_NODE_RANGE='$GpuNodeRange' GPU_NODE_CPUS='$GpuNodeCpus' \
+  GPU_NODE_MEMORY='$GpuNodeRealMemoryMB' GPU_TYPE='$GpuType' GPU_GRES_MODE='$GpuGresMode' OCR_MAX_TIME='$OcrMaxTime'
 bash /tmp/azlocal-bundle/controller-setup.sh 2>&1
 "@ -replace "`r`n", "`n"
     $scriptFile = "$work/run.sh"

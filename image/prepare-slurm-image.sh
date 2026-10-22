@@ -44,6 +44,16 @@ fi
 systemctl disable --now slurmctld slurmd munge nfs-kernel-server || true
 rm -f /etc/munge/munge.key
 
+########## Optional: GPU compute nodes (INSTALL_NVIDIA=1) ##########
+# Driver + CUDA runtime for the DDA-attached GPU of OCR nodes. The driver is only useful on a
+# VM that really owns a GPU, so build a separate image ("slurm-ubuntu2404-gpu") with this flag.
+# Slurm itself must be built with NVML for AutoDetect=nvml; otherwise list the devices in gres.conf.
+if [[ "${INSTALL_NVIDIA:-0}" == "1" ]]; then
+  apt-get install -y --no-install-recommends ubuntu-drivers-common
+  ubuntu-drivers install --gpgpu nvidia:580-server
+  apt-get install -y --no-install-recommends nvidia-cuda-toolkit python3-venv python3-pip
+fi
+
 cat >/etc/azlocal-slurm-image <<EOF
 image=slurm-ubuntu2404
 built=$(date -u +%Y-%m-%dT%H:%M:%SZ)

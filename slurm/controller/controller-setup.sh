@@ -15,6 +15,14 @@ NODE_CPUS="${NODE_CPUS:-2}"
 NODE_MEMORY="${NODE_MEMORY:-3500}"
 SUSPEND_TIME="${SUSPEND_TIME:-120}"
 NFS_CLIENTS="${NFS_CLIENTS:?}"
+# Optional GPU nodes for the OCR workload (empty GPU_NODE_RANGE = feature off)
+GPU_NODE_RANGE="${GPU_NODE_RANGE:-}"
+GPU_NODE_CPUS="${GPU_NODE_CPUS:-2}"
+GPU_NODE_MEMORY="${GPU_NODE_MEMORY:-3500}"
+GPU_TYPE="${GPU_TYPE:-rtx6000}"
+GPU_GRES_MODE="${GPU_GRES_MODE:-sim}"        # sim (fake device) | nvml (real NVIDIA GPUs)
+OCR_MAX_TIME="${OCR_MAX_TIME:-10:00:00}"
+OCR_PREWARM_MIN="${OCR_PREWARM_MIN:-0}"
 INSTALL_DIR=/opt/azlocal-slurm
 CONF_DIR=/etc/azlocal-slurm
 
@@ -37,6 +45,31 @@ sed -e "s|__CLUSTER_NAME__|$CLUSTER_NAME|g" \
     "$BUNDLE_DIR/etc/slurm.conf.tpl" >/etc/slurm/slurm.conf
 chmod 0644 /etc/slurm/slurm.conf
 
+if [[ -n "$GPU_NODE_RANGE" ]]; then
+  echo "==> GPU nodes $GPU_NODE_RANGE (gres mode: $GPU_GRES_MODE)"
+  sed -e "s|__GPU_NODE_RANGE__|$GPU_NODE_RANGE|g" \
+      -e "s|__GPU_NODE_CPUS__|$GPU_NODE_CPUS|g" \
+      -e "s|__GPU_NODE_MEMORY__|$GPU_NODE_MEMORY|g" \
+      -e "s|__GPU_TYPE__|$GPU_TYPE|g" \
+      -e "s|__OCR_MAX_TIME__|$OCR_MAX_TIME|g" \
+      "$BUNDLE_DIR/etc/slurm.gpu.conf.tpl" >>/etc/slurm/slurm.conf
+  if [[ "$GPU_GRES_MODE" == "nvml" ]]; then
+    echo "AutoDetect=nvml" >/etc/slurm/gres.conf
+  else
+    echo "# POC: simulated GPU, no physical device" >/etc/slurm/gres.conf
+    echo "Name=gpu Type=$GPU_TYPE File=/dev/null" >>/etc/slurm/gres.conf
+  fi
+  chmod 0644 /etc/slurm/gres.conf
+  install -m 0755 "$BUNDLE_DIR/bin/azlocal-ocr-window.sh" "$INSTALL_DIR/bin/"
+  mkdir -p /shared/hooks.d/all /shared/hooks.d/gpu /shared/ocr/in /shared/ocr/out
+  rm -f /shared/hooks.d/*.sh
+  if compgen -G "$BUNDLE_DIR/hooks/gpu/*.sh" >/dev/null; then install -m 0755 "$BUNDLE_DIR"/hooks/gpu/*.sh /shared/hooks.d/gpu/; fi
+  chown -R hpcuser:hpcuser /shared/ocr
+  if (( OCR_PREWARM_MIN > 0 )); then
+    "$INSTALL_DIR/bin/azlocal-ocr-window.sh" cron >/etc/cron.d/azlocal-ocr-window
+  fi
+fi
+
 echo "==> Name resolution"
 sed -i "/[[:space:]]$CONTROLLER_NAME\$/d" /etc/hosts
 echo "$CONTROLLER_IP $CONTROLLER_NAME" >>/etc/hosts
@@ -49,6 +82,10 @@ if [[ -n "${NODE_IP_BASE:-}" ]]; then
     for n in $(scontrol show hostnames "$NODE_RANGE" 2>/dev/null || true); do
       num="$(sed -E 's/^.*[^0-9]([0-9]+)$/\1/' <<<"$n")"
       echo "${NODE_IP_PREFIX}$((NODE_IP_BASE + 10#$num)) $n"
+    done
+    for n in $(scontrol show hostnames "$GPU_NODE_RANGE" 2>/dev/null || true); do
+      num="$(sed -E 's/^.*[^0-9]([0-9]+)$/\1/' <<<"$n")"
+      echo "${NODE_IP_PREFIX}$((GPU_IP_BASE + 10#$num)) $n"
     done
     echo "# azlocal-slurm end"
   } >>/etc/hosts

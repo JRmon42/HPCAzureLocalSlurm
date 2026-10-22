@@ -40,6 +40,9 @@ param storagePathId string = ''
 @description('Install the Arc guest agent (guest management). Not required for compute nodes and slows provisioning')
 param enableGuestManagement bool = false
 
+@description('GPUs to attach to the VM (Discrete Device Assignment). Empty = no GPU. Example: [{"assignmentType":"GpuDDA","gpuName":"NVIDIA RTX PRO 6000","partitionSizeMB":0}]')
+param gpus array = []
+
 param tags object = {}
 
 var ipConfigProperties = union({
@@ -78,7 +81,8 @@ resource machine 'Microsoft.HybridCompute/machines@2025-01-13' = {
   }
 }
 
-resource vm 'Microsoft.AzureStackHCI/virtualMachineInstances@2024-01-01' = {
+// 2024-05-01-preview is the first API version exposing virtualMachineGPUs
+resource vm 'Microsoft.AzureStackHCI/virtualMachineInstances@2024-05-01-preview' = {
   name: 'default'
   scope: machine
   extendedLocation: {
@@ -86,11 +90,13 @@ resource vm 'Microsoft.AzureStackHCI/virtualMachineInstances@2024-01-01' = {
     name: customLocationId
   }
   properties: {
-    hardwareProfile: {
+    hardwareProfile: union({
       vmSize: 'Custom'
       processors: processors
       memoryMB: memoryMB
-    }
+    }, empty(gpus) ? {} : {
+      virtualMachineGPUs: gpus
+    })
     osProfile: {
       adminUsername: adminUsername
       computerName: nodeName

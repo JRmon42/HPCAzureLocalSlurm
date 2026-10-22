@@ -20,10 +20,11 @@ fi
 echo "$CONTROLLER_IP $(scontrol show config | awk -F'[ =(]+' '/^SlurmctldHost\[0\]/{print $2}')" >>"$HOSTS_FILE"
 
 create_vm() {
-  local node="$1" cpus mem ip
+  local node="$1" cpus mem ip gpus
   read -r cpus mem <<<"$(node_size "$node")"
   ip="$(node_ip "$node")"
-  log "$node: creating VM cpus=$cpus memoryMB=$mem ip=${ip:-pool}"
+  gpus="$(node_gpus "$node")"
+  log "$node: creating VM cpus=$cpus memoryMB=$mem ip=${ip:-pool} gpus=$gpus"
   az deployment group create \
     --resource-group "$RESOURCE_GROUP" \
     --name "slurm-$node-$(date +%s)" \
@@ -32,7 +33,7 @@ create_vm() {
                  customLocationId="$CUSTOM_LOCATION_ID" logicalNetworkId="$LOGICAL_NETWORK_ID" \
                  imageId="$IMAGE_ID" ipAddress="${ip}" processors="$cpus" memoryMB="$mem" \
                  adminUsername="$ADMIN_USER" sshPublicKey="$(cat "$SSH_KEY.pub")" \
-                 storagePathId="${STORAGE_PATH_ID:-}" \
+                 storagePathId="${STORAGE_PATH_ID:-}" gpus="$gpus" \
                  tags="{\"SlurmCluster\":\"$(scontrol show config | awk '/^ClusterName/{print $3}')\",\"SlurmNode\":\"$node\",\"ManagedBy\":\"azlocal-slurm\"}" \
     --output none
 }

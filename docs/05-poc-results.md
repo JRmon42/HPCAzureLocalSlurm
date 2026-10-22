@@ -119,6 +119,14 @@ Azure. The Azure Local hosts were also checked after the runs through PowerShell
 Only the image (`slurm-ubuntu2404.vhd`) and the controller OS disk remain on the cluster shared volumes,
 so the VM delete also removes the OS disk.
 
+### Regression run after the OCR/GPU changes
+
+After adding the GPU partition and per-class hooks (`/shared/hooks.d/all`, `/shared/hooks.d/<class>`),
+the E2E was re-run on the redeployed controller: **E2E-PASS**.
+hello: provisioning 445 s, deletion 303 s; mpi: provisioning 318 s, deletion 263 s.
+Lesson: node hooks (tesseract install) must be scoped to the node class, otherwise CPU nodes pay a
+bootstrap penalty (521 s vs about 250 s).
+
 ## Issues found during the POC and their resolution
 
 | # | Issue | Root cause | Resolution (in the repo) |
@@ -134,6 +142,8 @@ so the VM delete also removes the OS disk.
 | 9 | Controller setup failed at name resolution | `scontrol show hostnames` needs a `slurm.conf` | `slurm.conf` is written before `/etc/hosts` generation |
 | 10 | Nodes stayed `idle%` for 10 min after a delete of ≈3 min | `SuspendTimeout=600` is always waited in full | `SuspendTimeout=360` (≈ 2 × measured delete time) |
 | 11 | E2E harness reported FAIL although jobs worked | Short jobs finished between two polls; decommission loop waited for `idle~` | Harness samples VMs during `CONFIGURING`, checks every `hpc-*` ARM resource, accepts `idle%` |
+| 12 | After a full stop/start of the LocalBox host, the controller VM came back with **no IPv4** (Arc "Disconnected", unreachable) | Only link-local IPv6 inside the guest; the static IP given by the logical network was not re-applied after the nested hosts restarted. Not reproducible from the Azure side | POC: delete and redeploy the controller (`03-deploy-controller.ps1`, ~15 min; no state to keep). Production: keep the controller outside the Azure Local lifecycle (the customer's existing on-prem controller) or add a guest netplan file |
+| 13 | GPU property rejected by API `2024-01-01` | `virtualMachineGPUs` appears in `2024-05-01-preview` | `node.bicep` uses `2024-05-01-preview` for the VM instance; CPU nodes regression-tested |
 
 ## Optimization opportunities found
 

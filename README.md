@@ -32,7 +32,8 @@ in Azure.
 | [05 – POC results](docs/05-poc-results.md) | What was deployed, test evidence, measured provisioning/decommissioning times |
 | [06 – Production considerations](docs/06-production-considerations.md) | HA, performance, GPU, identity, image pipeline, limitations |
 | [07 – Sharing with OCR workloads](docs/07-coexistence-ocr-workloads.md) | "Qwen for OCR" clarification; options A/B/C (background, superseded by 08) |
-| [08 – OCR GPU night window](docs/08-ocr-gpu-night-window.md) | Customer answers: Qwen-VL OCR at night, 8 GPUs (DDA), time-window design, open questions |
+| [08 – OCR GPU night window](docs/08-ocr-gpu-night-window.md) | Customer answers, night-window design, **what is implemented / simulated / missing**, production how-to |
+| [Demo guide (Word)](Demo-Guide-Azure-Local-Slurm.docx) | Step-by-step customer demo script |
 
 ## Repository layout
 
@@ -53,12 +54,15 @@ slurm/
   bin/azlocal-resume-fail.sh  ResumeFailProgram - clean up nodes that did not join
   bin/azlocal-epilog-slurmctld.sh  per-job decommissioning (POWER_DOWN_ASAP)
   bin/azlocal-common.sh       shared helpers (auth, IDs, sizing, SSH)
-  bin/node-bootstrap.sh       runs on a new VM: munge, NFS, configless slurmd
+  bin/node-bootstrap.sh       runs on a new VM: munge, NFS, site hooks, configless slurmd
+  bin/azlocal-ocr-window.sh   night window for the GPU/OCR partition (daily blocking reservation)
   controller/controller-setup.sh  configures the controller
   etc/slurm.conf.tpl          Slurm configuration (CLOUD nodes, power saving)
+  etc/slurm.gpu.conf.tpl      GPU nodes + `ocr` partition (appended when GPU_NODE_RANGE is set)
   etc/azlocal.conf.tpl        Azure Local target + lifecycle settings
   etc/node.json               compiled ARM template used on the controller
-tests/                        hello + MPI jobs, e2e-test.sh
+  hooks/gpu/10-ocr-tools.sh   node hook for GPU nodes (POC: tesseract; production: driver check, model mount)
+tests/                        hello + MPI + OCR demo jobs, e2e-test.sh
 docs/                         documentation and diagrams
 ```
 

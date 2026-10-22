@@ -47,12 +47,30 @@ nic_id()     { echo "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GR
 VMI_API="2024-01-01"
 NIC_API="2024-01-01"
 
-# Deterministic static IP from the trailing number of the node name (hpc-07 -> base+7)
+# Deterministic static IP from the trailing number of the node name (hpc-07 -> base+7).
+# Nodes whose name starts with GPU_NODE_PREFIX use GPU_IP_BASE instead (gpu-03 -> 110+3).
 node_ip() {
-  local n
-  [[ -z "${NODE_IP_BASE:-}" ]] && return 0
+  local n base="${NODE_IP_BASE:-}"
+  [[ -z "$base" ]] && return 0
+  if [[ -n "${GPU_NODE_PREFIX:-}" && "$1" == "$GPU_NODE_PREFIX"* && -n "${GPU_IP_BASE:-}" ]]; then
+    base="$GPU_IP_BASE"
+  fi
   n="$(sed -E 's/^.*[^0-9]([0-9]+)$/\1/' <<<"$1")"
-  echo "${NODE_IP_PREFIX}$((NODE_IP_BASE + 10#$n))"
+  echo "${NODE_IP_PREFIX}$((base + 10#$n))"
+}
+
+# JSON array of GPUs to attach (DDA) to the VM of a node, based on its Slurm Gres= definition.
+# "[]" unless GPU_DDA_ENABLE=true, so a POC without physical GPU simulates them in Slurm only.
+node_gpus() {
+  local gres count i out=()
+  if [[ "${GPU_DDA_ENABLE:-false}" != "true" ]]; then echo "[]"; return 0; fi
+  gres="$(scontrol show node "$1" -o | grep -oP '(?<= Gres=)\S+')" || { echo "[]"; return 0; }
+  count="$(grep -oP 'gpu(:[A-Za-z0-9_-]+)?:\K\d+' <<<"$gres" | head -1)"
+  for ((i = 0; i < ${count:-0}; i++)); do
+    out+=("{\"assignmentType\":\"GpuDDA\",\"gpuName\":\"${GPU_DDA_NAME:-}\",\"partitionSizeMB\":0}")
+  done
+  local IFS=,
+  echo "[${out[*]}]"
 }
 
 # Actual IP of an existing NIC (used when IPs come from the logical network pool)

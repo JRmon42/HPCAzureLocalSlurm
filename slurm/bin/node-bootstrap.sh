@@ -25,6 +25,19 @@ for _ in $(seq 1 12); do
 done
 mountpoint -q /shared
 
+# Site hooks: drivers, model store mounts, extra packages... run as root, in order, from
+# /shared/hooks.d/all/*.sh and /shared/hooks.d/<node class>/*.sh (class = node name without its
+# trailing -NN, e.g. gpu-03 -> gpu). They run BEFORE slurmd registers, and a failing hook fails the
+# bootstrap, so Slurm never schedules a job on a half-ready node.
+node_class="$(hostname -s | sed -E 's/-?[0-9]+$//')"
+for dir in /shared/hooks.d/all "/shared/hooks.d/$node_class"; do
+  for hook in "$dir"/*.sh; do
+    [[ -f "$hook" ]] || continue
+    echo "==> hook $hook"
+    bash "$hook"
+  done
+done
+
 # slurmd in configless mode: slurm.conf is fetched from slurmctld
 echo "SLURMD_OPTIONS=\"--conf-server $CONTROLLER_IP\"" >/etc/default/slurmd
 mkdir -p /etc/systemd/system/slurmd.service.d
@@ -41,5 +54,4 @@ systemctl daemon-reload
 systemctl enable slurmd
 systemctl restart slurmd
 sleep 3
-systemctl is-active slurmd
 echo "BOOTSTRAP-OK $(hostname) $(date -u +%Y-%m-%dT%H:%M:%SZ)"

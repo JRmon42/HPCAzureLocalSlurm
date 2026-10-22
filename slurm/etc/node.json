@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "11852041111010497518"
+      "templateHash": "18071844307879924773"
     }
   },
   "parameters": {
@@ -87,6 +87,13 @@
         "description": "Install the Arc guest agent (guest management). Not required for compute nodes and slows provisioning"
       }
     },
+    "gpus": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "GPUs to attach to the VM (Discrete Device Assignment). Empty = no GPU. Example: [{\"assignmentType\":\"GpuDDA\",\"gpuName\":\"NVIDIA RTX PRO 6000\",\"partitionSizeMB\":0}]"
+      }
+    },
     "tags": {
       "type": "object",
       "defaultValue": {}
@@ -128,7 +135,7 @@
     },
     {
       "type": "Microsoft.AzureStackHCI/virtualMachineInstances",
-      "apiVersion": "2024-01-01",
+      "apiVersion": "2024-05-01-preview",
       "scope": "[resourceId('Microsoft.HybridCompute/machines', parameters('nodeName'))]",
       "name": "default",
       "extendedLocation": {
@@ -136,11 +143,7 @@
         "name": "[parameters('customLocationId')]"
       },
       "properties": {
-        "hardwareProfile": {
-          "vmSize": "Custom",
-          "processors": "[parameters('processors')]",
-          "memoryMB": "[parameters('memoryMB')]"
-        },
+        "hardwareProfile": "[union(createObject('vmSize', 'Custom', 'processors', parameters('processors'), 'memoryMB', parameters('memoryMB')), if(empty(parameters('gpus')), createObject(), createObject('virtualMachineGPUs', parameters('gpus'))))]",
         "osProfile": {
           "adminUsername": "[parameters('adminUsername')]",
           "computerName": "[parameters('nodeName')]",
