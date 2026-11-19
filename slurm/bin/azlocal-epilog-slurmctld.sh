@@ -6,6 +6,14 @@
 source /etc/azlocal-slurm/azlocal.conf
 [[ "${POWER_DOWN_AFTER_JOB:-false}" == "true" ]] || exit 0
 [[ -n "${SLURM_JOB_NODELIST:-}" ]] || exit 0
+# Only VM-backed nodes (Feature=azlocal) are decommissioned; static nodes such as the
+# controller/Kubernetes gateway must never be powered down.
+nodes=""
+for n in $(scontrol show hostnames "$SLURM_JOB_NODELIST"); do
+  scontrol show node "$n" 2>/dev/null | grep -q 'AvailableFeatures=.*azlocal' && nodes+="${nodes:+,}$n"
+done
+[[ -n "$nodes" ]] || exit 0
+SLURM_JOB_NODELIST="$nodes"
 scontrol update nodename="$SLURM_JOB_NODELIST" state=power_down_asap \
   reason="azlocal: job $SLURM_JOB_ID ended" >/dev/null 2>&1
 printf '%s [epilog] job %s ended -> power_down_asap %s\n' \

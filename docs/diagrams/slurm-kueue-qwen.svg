@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="890" viewBox="0 0 1280 890" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0063b1"/></marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d83b01"/></marker>
+  </defs>
+  <rect width="1280" height="890" fill="#ffffff"/>
+  <text x="640" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#1b1b1b">OCR with Qwen-VL: Slurm front door, Kueue admission, Kubernetes on Azure Local</text>
+  <text x="640" y="54" text-anchor="middle" font-size="13" fill="#555">Researchers keep sbatch; GPU quota, night window and GPU release are handled by Kueue and Kubernetes</text>
+
+  <!-- Azure control plane -->
+  <rect x="30" y="72" width="1220" height="92" rx="12" fill="#eaf3fc" stroke="#0078d4" stroke-width="2"/>
+  <text x="48" y="96" font-size="15" font-weight="600" fill="#0063b1">Microsoft Azure: control plane</text>
+  <text x="48" y="120" font-size="12">Azure Arc: custom location, AKS Arc cluster resource (kubectl access through Arc cluster connect), Entra ID / RBAC</text>
+  <text x="48" y="140" font-size="12">Azure Local VM API (ARM): still used by Slurm for the CPU / VM-per-job partitions (hpc, ocr); not needed for the Kueue path</text>
+
+  <!-- On-premises / Slurm side -->
+  <rect x="30" y="186" width="470" height="640" rx="12" fill="#fff8e6" stroke="#c19c00" stroke-width="2"/>
+  <text x="48" y="210" font-size="15" font-weight="600" fill="#7a5f00">On-premises: Slurm (POC: VM slurmctl on Azure Local)</text>
+
+  <rect x="60" y="230" width="410" height="80" rx="8" fill="#fff" stroke="#c19c00"/>
+  <text x="265" y="254" text-anchor="middle" font-weight="600">Researcher / pipeline</text>
+  <text x="265" y="276" text-anchor="middle" font-size="12" font-family="Consolas, monospace">sbatch --partition=k8s ocr-qwen-kueue.sbatch</text>
+  <text x="265" y="296" text-anchor="middle" font-size="11" fill="#777">same UX as today; squeue / scancel / accounting unchanged</text>
+
+  <rect x="60" y="350" width="410" height="130" rx="8" fill="#fff" stroke="#c19c00"/>
+  <text x="265" y="374" text-anchor="middle" font-weight="600">Slurm controller (slurmctld)</text>
+  <text x="265" y="396" text-anchor="middle" font-size="12">Partition k8s = always-on gateway node</text>
+  <text x="265" y="414" text-anchor="middle" font-size="12">(OverSubscribe: proxy jobs only wait and relay logs)</text>
+  <text x="265" y="436" text-anchor="middle" font-size="12" fill="#555">Partitions hpc / ocr: VM-per-job via Resume/SuspendProgram</text>
+  <text x="265" y="456" text-anchor="middle" font-size="12" fill="#555">(kept for CPU and non-containerised workloads)</text>
+
+  <rect x="60" y="520" width="410" height="150" rx="8" fill="#fff" stroke="#c19c00"/>
+  <text x="265" y="544" text-anchor="middle" font-weight="600">Slurm job = proxy: azlocal-kueue-run.sh</text>
+  <text x="265" y="566" text-anchor="middle" font-size="12">creates a Kubernetes Job labelled with the LocalQueue</text>
+  <text x="265" y="584" text-anchor="middle" font-size="12">waits for Kueue admission, streams pod logs to the Slurm output</text>
+  <text x="265" y="602" text-anchor="middle" font-size="12">returns the pod exit code; deletes the Job on scancel / time limit</text>
+  <text x="265" y="628" text-anchor="middle" font-size="12" fill="#555">kubeconfig = ServiceAccount slurm-gateway,</text>
+  <text x="265" y="646" text-anchor="middle" font-size="12" fill="#555">RBAC limited to jobs / pods / workloads in namespace ocr</text>
+
+  <rect x="60" y="700" width="410" height="100" rx="8" fill="#fff" stroke="#c19c00"/>
+  <text x="265" y="724" text-anchor="middle" font-weight="600">Shared storage (NFS in the POC)</text>
+  <text x="265" y="746" text-anchor="middle" font-size="12" font-family="Consolas, monospace">/shared/ocr/in  /shared/ocr/out  /shared/k8s</text>
+  <text x="265" y="768" text-anchor="middle" font-size="12" fill="#555">Production: PVC on Azure Local storage, or the customer file system</text>
+  <text x="265" y="786" text-anchor="middle" font-size="12" fill="#555">+ model cache volume for the Qwen-VL weights</text>
+
+  <!-- Azure Local / Kubernetes -->
+  <rect x="540" y="186" width="710" height="640" rx="12" fill="#f3f9f1" stroke="#107c10" stroke-width="2"/>
+  <text x="558" y="210" font-size="15" font-weight="600" fill="#107c10">Azure Local: Arc-enabled AKS cluster (POC: k3s VM k8s-01)</text>
+
+  <rect x="570" y="230" width="650" height="190" rx="8" fill="#fff" stroke="#107c10"/>
+  <text x="895" y="254" text-anchor="middle" font-weight="600">Kueue (admission control)</text>
+  <rect x="590" y="270" width="190" height="60" rx="6" fill="#eaf6ea" stroke="#107c10"/>
+  <text x="685" y="292" text-anchor="middle" font-size="12" font-weight="600">LocalQueue ocr-queue</text>
+  <text x="685" y="312" text-anchor="middle" font-size="11" fill="#555">namespace ocr</text>
+  <rect x="820" y="270" width="380" height="60" rx="6" fill="#eaf6ea" stroke="#107c10"/>
+  <text x="1010" y="292" text-anchor="middle" font-size="12" font-weight="600">ClusterQueue ocr-cq</text>
+  <text x="1010" y="312" text-anchor="middle" font-size="11" fill="#555">quota: nvidia.com/gpu, cpu, memory (flavor rtx6000)</text>
+  <rect x="590" y="350" width="610" height="56" rx="6" fill="#fff1e6" stroke="#d83b01"/>
+  <text x="895" y="372" text-anchor="middle" font-size="12" font-weight="600" fill="#a52a00">Night window: CronJobs patch ClusterQueue stopPolicy</text>
+  <text x="895" y="392" text-anchor="middle" font-size="11" fill="#555">20:00 None (admit)  /  06:00 Hold (no new OCR workload during the researchers' day)</text>
+
+  <rect x="570" y="450" width="650" height="230" rx="8" fill="#fff" stroke="#107c10"/>
+  <text x="895" y="474" text-anchor="middle" font-weight="600">GPU node pool (VMs with DDA GPUs, one RTX 6000 per VM)</text>
+  <text x="895" y="492" text-anchor="middle" font-size="11" fill="#555">NVIDIA GPU Operator: driver, device plugin, DCGM. POC: nvidia.com/gpu advertised on the node (simulated)</text>
+  <rect x="600" y="510" width="270" height="150" rx="6" fill="#e8f1fb" stroke="#0078d4"/>
+  <text x="735" y="534" text-anchor="middle" font-size="12" font-weight="600">Pod (Job slurm-&lt;jobid&gt;)</text>
+  <text x="735" y="554" text-anchor="middle" font-size="12">llama.cpp + Qwen-VL (GGUF)</text>
+  <text x="735" y="572" text-anchor="middle" font-size="12">requests nvidia.com/gpu: 1</text>
+  <text x="735" y="590" text-anchor="middle" font-size="12">reads /ocr/in, writes /ocr/out</text>
+  <text x="735" y="618" text-anchor="middle" font-size="11" fill="#555">POC: CPU image, Qwen2.5-VL-3B</text>
+  <text x="735" y="636" text-anchor="middle" font-size="11" fill="#555">Prod: :full-cuda image, GPU layers = 99</text>
+  <rect x="900" y="510" width="290" height="150" rx="6" fill="#f2f2f2" stroke="#999" stroke-dasharray="4 3"/>
+  <text x="1045" y="534" text-anchor="middle" font-size="12" font-weight="600">Other GPU consumers</text>
+  <text x="1045" y="556" text-anchor="middle" font-size="12">AVD GPU VMs, JupyterHub, training</text>
+  <text x="1045" y="578" text-anchor="middle" font-size="12" fill="#555">DDA GPUs are not shared: split the 8 GPUs</text>
+  <text x="1045" y="596" text-anchor="middle" font-size="12" fill="#555">statically between these and the AKS pool</text>
+
+  <rect x="570" y="710" width="650" height="90" rx="8" fill="#fff" stroke="#107c10"/>
+  <text x="895" y="734" text-anchor="middle" font-weight="600">GPU release</text>
+  <text x="895" y="756" text-anchor="middle" font-size="12">Pod ends: the device plugin frees the GPU, Kueue frees the quota and admits the next workload.</text>
+  <text x="895" y="776" text-anchor="middle" font-size="12">No VM is deleted, so no DDA device has to be handed back to the host between jobs.</text>
+
+  <!-- Flows -->
+  <path d="M265,310 L265,350" stroke="#333" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M265,480 L265,520" stroke="#333" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M470,570 L590,300" stroke="#0063b1" stroke-width="2.5" fill="none" marker-end="url(#ab)"/>
+  <path d="M780,300 L820,300" stroke="#107c10" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M895,330 L895,350" stroke="#d83b01" stroke-width="2" fill="none"/>
+  <path d="M1010,330 C1010,430 800,440 760,510" stroke="#107c10" stroke-width="2.5" fill="none" marker-end="url(#a)"/>
+  <path d="M600,600 L470,740" stroke="#0063b1" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#ab)"/>
+  <path d="M600,585 C540,585 520,600 470,600" stroke="#0063b1" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#ab)"/>
+
+  <!-- Step badges -->
+  <g font-size="12" font-weight="700" fill="#fff" text-anchor="middle">
+    <circle cx="285" cy="330" r="11" fill="#333"/><text x="285" y="334">1</text>
+    <circle cx="285" cy="500" r="11" fill="#333"/><text x="285" y="504">2</text>
+    <circle cx="540" cy="430" r="11" fill="#0063b1"/><text x="540" y="434">3</text>
+    <circle cx="900" cy="430" r="11" fill="#107c10"/><text x="900" y="434">4</text>
+    <circle cx="700" cy="497" r="11" fill="#107c10"/><text x="700" y="501">5</text>
+    <circle cx="530" cy="665" r="11" fill="#0063b1"/><text x="530" y="669">6</text>
+  </g>
+
+  <!-- Legend -->
+  <text x="48" y="852" font-size="12" fill="#333">1 sbatch   2 Slurm starts the proxy job on the gateway node   3 Job created in the LocalQueue (kubeconfig, namespaced ServiceAccount)</text>
+  <text x="48" y="872" font-size="12" fill="#333">4 Kueue admits it if GPU quota is free and the window is open   5 pod runs Qwen-VL OCR on a GPU node   6 logs to the Slurm output, results on shared storage; pod end = GPU released; scancel deletes the Job</text>
+</svg>

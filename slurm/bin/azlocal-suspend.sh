@@ -11,6 +11,10 @@ az_login || { log "az login failed"; exit 1; }
 
 suspend_one() {
   local node="$1" t0=$SECONDS
+  if ! scontrol show node "$node" 2>/dev/null | grep -q 'AvailableFeatures=.*azlocal'; then
+    log "$node: not a VM-backed node (no azlocal feature), refusing to delete"
+    return
+  fi
   if [[ "$LIFECYCLE" == "persistent" ]]; then
     az stack-hci-vm stop --name "$node" --resource-group "$RESOURCE_GROUP" --output none \
       && log "$node: VM stopped in $((SECONDS - t0))s" || log "$node: stop failed"

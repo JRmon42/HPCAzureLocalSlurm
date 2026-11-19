@@ -35,6 +35,7 @@ param(
     [int]    $GpuIpBase = 110,
     [ValidateSet('sim', 'nvml')] [string] $GpuGresMode = 'sim',
     [switch] $GpuDda,
+    [switch] $K8sGateway,
     [string] $OcrOpenStart = '20:00',
     [string] $OcrOpenEnd = '06:00',
     [string] $OcrMaxTime = '10:00:00',
@@ -102,9 +103,12 @@ if ($Stage -in 'All', 'Configure') {
     $work = Join-Path ([IO.Path]::GetTempPath()) "azlocal-bundle-$(Get-Random)"
     New-Item -ItemType Directory -Path "$work/bundle/bin", "$work/bundle/etc" | Out-Null
     Copy-Item "$repoRoot/slurm/bin/*.sh" "$work/bundle/bin/"
-    Copy-Item "$repoRoot/slurm/etc/slurm.conf.tpl", "$repoRoot/slurm/etc/slurm.gpu.conf.tpl", "$repoRoot/slurm/etc/node.json" "$work/bundle/etc/"
-    New-Item -ItemType Directory "$work/bundle/hooks/gpu" -Force | Out-Null
+    Copy-Item "$repoRoot/slurm/etc/slurm.conf.tpl", "$repoRoot/slurm/etc/slurm.gpu.conf.tpl", "$repoRoot/slurm/etc/slurm.k8s.conf.tpl", "$repoRoot/slurm/etc/node.json" "$work/bundle/etc/"
+    New-Item -ItemType Directory "$work/bundle/hooks/gpu", "$work/extra/k8s", "$work/extra/samples", "$work/extra/tests" -Force | Out-Null
     Copy-Item "$repoRoot/slurm/hooks/gpu/*.sh" "$work/bundle/hooks/gpu/"
+    Copy-Item "$repoRoot/k8s/qwen-ocr.sh" "$work/extra/k8s/"
+    Copy-Item "$repoRoot/tests/ocr-samples/*" "$work/extra/samples/"
+    Copy-Item "$repoRoot/tests/ocr-demo.sbatch", "$repoRoot/tests/ocr-qwen-kueue.sbatch" "$work/extra/tests/"
     Copy-Item "$repoRoot/slurm/controller/controller-setup.sh" "$work/bundle/"
     $conf = (Get-Content "$repoRoot/slurm/etc/azlocal.conf.tpl" -Raw) `
         -replace '__SUBSCRIPTION_ID__', $sub -replace '__RESOURCE_GROUP__', $ResourceGroup `
@@ -115,12 +119,21 @@ if ($Stage -in 'All', 'Configure') {
         -replace '__GPU_IP_BASE__', $GpuIpBase -replace '__GPU_DDA_ENABLE__', $(if ($GpuDda) { 'true' } else { 'false' }) `
         -replace '__GPU_NODE_RANGE__', $GpuNodeRange -replace '__OCR_OPEN_START__', $OcrOpenStart `
         -replace '__OCR_OPEN_END__', $OcrOpenEnd
-    # Bash files must keep LF line endings
-    Get-ChildItem $work -Recurse -File | ForEach-Object {
+    # Bash files must keep LF line endings (the PNG samples are binary and must not be touched)
+    Get-ChildItem $work -Recurse -File | Where-Object Extension -ne '.png' | ForEach-Object {
         $t = (Get-Content $_.FullName -Raw) -replace "`r`n", "`n"; [IO.File]::WriteAllText($_.FullName, $t)
     }
     [IO.File]::WriteAllText("$work/bundle/azlocal.conf", ($conf -replace "`r`n", "`n"))
     tar -czf "$work/bundle.tgz" -C "$work/bundle" .
+    tar -czf "$work/extra.tgz" -C "$work/extra" .
+    $x64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$work/extra.tgz"))
+    # Run Command bodies are size-limited, so the OCR demo files travel in a first, separate call
+    $extraScript = "#!/bin/bash`nset -e`nrm -rf /tmp/azlocal-extra && mkdir -p /tmp/azlocal-extra`necho '$x64' | base64 -d | tar -xzf - -C /tmp/azlocal-extra`necho EXTRA-OK`n"
+    [IO.File]::WriteAllText("$work/extra.sh", $extraScript)
+    Write-Host '==> Uploading demo files'
+    $xName = "controller-extra-$(Get-Date -Format yyyyMMddHHmmss)"
+    Invoke-Az connectedmachine run-command create -g $ResourceGroup --machine-name $ControllerName `
+        --location $cl.location --name $xName --script "@$work/extra.sh" --timeout-in-seconds 300 -o none
     $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$work/bundle.tgz"))
 
     $runScript = @"
@@ -128,10 +141,12 @@ if ($Stage -in 'All', 'Configure') {
 set -euo pipefail
 rm -rf /tmp/azlocal-bundle && mkdir -p /tmp/azlocal-bundle
 echo '$b64' | base64 -d | tar -xzf - -C /tmp/azlocal-bundle
+cp -a /tmp/azlocal-extra/. /tmp/azlocal-bundle/
 export BUNDLE_DIR=/tmp/azlocal-bundle CLUSTER_NAME='$ClusterName' CONTROLLER_NAME='$ControllerName' \
   CONTROLLER_IP='$ControllerIp' NODE_RANGE='$NodeRange' NODE_CPUS='$NodeCpus' NODE_MEMORY='$NodeRealMemoryMB' \
   SUSPEND_TIME='$SuspendTime' NFS_CLIENTS='$NfsClients' GPU_NODE_RANGE='$GpuNodeRange' GPU_NODE_CPUS='$GpuNodeCpus' \
-  GPU_NODE_MEMORY='$GpuNodeRealMemoryMB' GPU_TYPE='$GpuType' GPU_GRES_MODE='$GpuGresMode' OCR_MAX_TIME='$OcrMaxTime'
+  GPU_NODE_MEMORY='$GpuNodeRealMemoryMB' GPU_TYPE='$GpuType' GPU_GRES_MODE='$GpuGresMode' OCR_MAX_TIME='$OcrMaxTime' \
+  K8S_GATEWAY='$(if ($K8sGateway) { 'true' } else { 'false' })'
 bash /tmp/azlocal-bundle/controller-setup.sh 2>&1
 "@ -replace "`r`n", "`n"
     $scriptFile = "$work/run.sh"

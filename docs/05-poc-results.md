@@ -166,3 +166,8 @@ az vm deallocate -g rg-hpc-azlocal-slurm -n LocalBox-Client      # stop (nested 
 az vm start      -g rg-hpc-azlocal-slurm -n LocalBox-Client      # resume later (allow ~15 min for Arc to reconnect)
 ./infra/99-teardown.ps1 -ResourceGroup rg-hpc-azlocal-slurm -Scope All   # delete everything
 ```
+
+## Slurm + Kueue + Qwen-VL test
+
+See [09](09-slurm-kueue-qwen.md): OCR job submitted with Slurm, admitted by Kueue on k3s, queueing at quota, night window and scancel validated. Lesson: the power-down epilog bypassed SuspendExcNodes and deleted the controller VM; it now only acts on nodes with Feature=azlocal.
+

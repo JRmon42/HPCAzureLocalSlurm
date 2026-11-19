@@ -23,6 +23,10 @@ GPU_TYPE="${GPU_TYPE:-rtx6000}"
 GPU_GRES_MODE="${GPU_GRES_MODE:-sim}"        # sim (fake device) | nvml (real NVIDIA GPUs)
 OCR_MAX_TIME="${OCR_MAX_TIME:-10:00:00}"
 OCR_PREWARM_MIN="${OCR_PREWARM_MIN:-0}"
+# Optional Slurm -> Kubernetes/Kueue gateway (partition k8s on this node); off unless K8S_GATEWAY=true
+K8S_GATEWAY="${K8S_GATEWAY:-false}"
+GW_CPUS="${GW_CPUS:-$(nproc)}"
+GW_MEMORY="${GW_MEMORY:-$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) / 1024 - 1500 ))}"
 INSTALL_DIR=/opt/azlocal-slurm
 CONF_DIR=/etc/azlocal-slurm
 
@@ -68,6 +72,23 @@ if [[ -n "$GPU_NODE_RANGE" ]]; then
   if (( OCR_PREWARM_MIN > 0 )); then
     "$INSTALL_DIR/bin/azlocal-ocr-window.sh" cron >/etc/cron.d/azlocal-ocr-window
   fi
+fi
+
+if [[ "$K8S_GATEWAY" == "true" ]]; then
+  echo "==> Kubernetes/Kueue gateway (partition k8s on $CONTROLLER_NAME)"
+  if ! command -v kubectl >/dev/null; then
+    ver="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+    curl -fsSL "https://dl.k8s.io/release/$ver/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl
+    chmod 0755 /usr/local/bin/kubectl
+  fi
+  sed -e "s|__CONTROLLER_NAME__|$CONTROLLER_NAME|g" -e "s|__CONTROLLER_IP__|$CONTROLLER_IP|g" \
+      -e "s|__GW_CPUS__|$GW_CPUS|g" -e "s|__GW_MEMORY__|$GW_MEMORY|g" \
+      "$BUNDLE_DIR/etc/slurm.k8s.conf.tpl" >>/etc/slurm/slurm.conf
+  mkdir -p /shared/ocr/bin /shared/ocr/in /shared/ocr/out /shared/k8s /shared/tests /var/spool/slurmd
+  install -m 0755 "$BUNDLE_DIR/k8s/qwen-ocr.sh" /shared/ocr/bin/qwen-ocr.sh
+  if compgen -G "$BUNDLE_DIR/samples/*" >/dev/null; then cp -n "$BUNDLE_DIR"/samples/* /shared/ocr/in/; fi
+  if compgen -G "$BUNDLE_DIR/tests/*" >/dev/null; then install -m 0755 "$BUNDLE_DIR"/tests/* /shared/tests/; fi
+  chown -R hpcuser:hpcuser /shared/ocr /shared/tests
 fi
 
 echo "==> Name resolution"
@@ -126,5 +147,12 @@ systemctl enable slurmctld
 systemctl restart slurmctld
 sleep 5
 systemctl is-active slurmctld
+if [[ "$K8S_GATEWAY" == "true" ]]; then
+  # slurmd on the controller registers the always-on gateway node
+  systemctl enable slurmd
+  systemctl restart slurmd
+  sleep 5
+  scontrol update nodename="$CONTROLLER_NAME" state=resume >/dev/null 2>&1 || true
+fi
 sinfo
 echo "CONTROLLER-SETUP-DONE"

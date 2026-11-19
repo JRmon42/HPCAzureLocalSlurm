@@ -33,6 +33,7 @@ in Azure.
 | [06 – Production considerations](docs/06-production-considerations.md) | HA, performance, GPU, identity, image pipeline, limitations |
 | [07 – Sharing with OCR workloads](docs/07-coexistence-ocr-workloads.md) | "Qwen for OCR" clarification; options A/B/C (background, superseded by 08) |
 | [08 – OCR GPU night window](docs/08-ocr-gpu-night-window.md) | Customer answers, night-window design, **what is implemented / simulated / missing**, production how-to |
+| [09 – Slurm + Kueue + Qwen-VL](docs/09-slurm-kueue-qwen.md) | OCR job submitted with Slurm and admitted by Kueue on Kubernetes (k3s in the POC, AKS Arc in production): diagram, test results, **prerequisites and customer steps** |
 | [Demo guide (Word)](Demo-Guide-Azure-Local-Slurm.docx) | Step-by-step customer demo script |
 
 ## Repository layout
@@ -62,7 +63,9 @@ slurm/
   etc/azlocal.conf.tpl        Azure Local target + lifecycle settings
   etc/node.json               compiled ARM template used on the controller
   hooks/gpu/10-ocr-tools.sh   node hook for GPU nodes (POC: tesseract; production: driver check, model mount)
-tests/                        hello + MPI + OCR demo jobs, e2e-test.sh
+  bin/azlocal-kueue-run.sh    Slurm job -> Kueue-managed Kubernetes Job proxy (partition k8s)
+k8s/                          k3s + Kueue setup, queues, night-window CronJobs, Qwen-VL OCR script
+tests/                        hello + MPI + OCR demo jobs, Qwen-VL/Kueue job and samples, e2e-test.sh
 docs/                         documentation and diagrams
 ```
 

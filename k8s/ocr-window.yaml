@@ -1,0 +1,72 @@
+# Night window for the OCR queue: Kueue stops admitting OCR workloads during the day.
+# Schedules use the time zone below. Running pods are not evicted at closing (Hold);
+# use HoldAndDrain to evict them. Jobs carry activeDeadlineSeconds, so nothing runs past
+# its Slurm time limit.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ocr-window
+  namespace: ocr
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ocr-window
+rules:
+  - apiGroups: ["kueue.x-k8s.io"]
+    resources: ["clusterqueues"]
+    resourceNames: ["ocr-cq"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ocr-window
+subjects:
+  - kind: ServiceAccount
+    name: ocr-window
+    namespace: ocr
+roleRef:
+  kind: ClusterRole
+  name: ocr-window
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ocr-window-open
+  namespace: ocr
+spec:
+  schedule: "0 20 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ocr-window
+          restartPolicy: OnFailure
+          containers:
+            - name: kubectl
+              image: registry.k8s.io/kubectl:v1.31.0
+              args: ["patch", "clusterqueue", "ocr-cq", "--type=merge", "-p", '{"spec":{"stopPolicy":"None"}}']
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ocr-window-close
+  namespace: ocr
+spec:
+  schedule: "0 6 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ocr-window
+          restartPolicy: OnFailure
+          containers:
+            - name: kubectl
+              image: registry.k8s.io/kubectl:v1.31.0
+              args: ["patch", "clusterqueue", "ocr-cq", "--type=merge", "-p", '{"spec":{"stopPolicy":"Hold"}}']

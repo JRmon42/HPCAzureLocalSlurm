@@ -1,0 +1,90 @@
+# Kueue objects for the OCR workload. Applied by k8s/bin/k8s-setup.sh.
+# Quotas are the POC values (single simulated GPU node); see docs/09 for production sizing.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ocr
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: rtx6000
+spec:
+  nodeLabels:
+    gpu.azlocal/model: rtx6000
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: ocr-cq
+spec:
+  namespaceSelector: {}
+  # None = admit; Hold = stop admitting new workloads (night window closed);
+  # HoldAndDrain = also evict the running ones. Toggled by k8s/ocr-window.yaml.
+  stopPolicy: None
+  queueingStrategy: BestEffortFIFO
+  resourceGroups:
+    - coveredResources: ["cpu", "memory", "nvidia.com/gpu"]
+      flavors:
+        - name: rtx6000
+          resources:
+            - name: cpu
+              nominalQuota: 6
+            - name: memory
+              nominalQuota: 18Gi
+            - name: nvidia.com/gpu
+              nominalQuota: 2
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: ocr-queue
+  namespace: ocr
+spec:
+  clusterQueue: ocr-cq
+---
+# What the Slurm gateway is allowed to do: manage Jobs in the ocr namespace, nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: slurm-gateway
+  namespace: ocr
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: slurm-gateway-token
+  namespace: ocr
+  annotations:
+    kubernetes.io/service-account.name: slurm-gateway
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: slurm-gateway
+  namespace: ocr
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["kueue.x-k8s.io"]
+    resources: ["workloads"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: slurm-gateway
+  namespace: ocr
+subjects:
+  - kind: ServiceAccount
+    name: slurm-gateway
+    namespace: ocr
+roleRef:
+  kind: Role
+  name: slurm-gateway
+  apiGroup: rbac.authorization.k8s.io
