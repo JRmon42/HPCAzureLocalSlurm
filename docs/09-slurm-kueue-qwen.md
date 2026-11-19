@@ -30,7 +30,7 @@ the Kueue reason (quota, window). Set `--timeout` (becomes `activeDeadlineSecond
 |------|-----|-----------|
 | Kubernetes | k3s on VM `k8s-01` (8 vCPU / 20 GB) on the nested Azure Local | AKS Arc cluster on Azure Local |
 | Kueue | v0.20.x, API `kueue.x-k8s.io/v1beta2` (v1beta1 is no longer served) | same, pin the version |
-| GPU | `nvidia.com/gpu: 8` advertised on the node (**simulated**) | NVIDIA GPU Operator, DDA RTX 6000 passed to the node VMs |
+| GPU | `nvidia.com/gpu: 8` advertised on the node (**simulated**) | NVIDIA GPU Operator, DDA RTX PRO 6000 passed to the node VMs |
 | Qwen-VL | `ggml-org/Qwen2.5-VL-3B-Instruct-GGUF` with llama.cpp on **CPU** | `:full-cuda` image, `GPU_LAYERS=99`, larger Qwen-VL as needed |
 | Storage | NFS `/shared` + hostPath | PVCs (Azure Local CSI or customer file system) |
 | Slurm gateway | controller VM `slurmctl` | any always-on Linux host with kubectl and munge |
@@ -60,7 +60,7 @@ the Kueue reason (quota, window). Set `--timeout` (becomes `activeDeadlineSecond
 
 1. **Azure Local cluster** with an Arc-enabled **AKS cluster** (AKS Arc) reachable from the Slurm network
    (kube-apiserver endpoint, port 6443, or Arc cluster connect).
-2. **GPU node pool**: RTX 6000 GPUs assigned by DDA to the AKS worker VMs (one GPU per VM). Confirm the GPU
+2. **GPU node pool**: RTX PRO 6000 GPUs (the RaaS design lists 4 Dell nodes x 2) assigned by DDA to the AKS worker VMs. Confirm the GPU
    model and driver support in the AKS Arc GPU documentation. Install the **NVIDIA GPU Operator**
    (driver, container toolkit, device plugin). The GPUs given to AKS cannot be used by AVD/JupyterHub at the
    same time: decide the split of the 8 GPUs.
@@ -124,7 +124,43 @@ the Kueue reason (quota, window). Set `--timeout` (becomes `activeDeadlineSecond
 | Cancel | `scancel <jobid>` (the proxy deletes the Kubernetes Job) |
 | Release stuck GPU | Pod deleted → device plugin frees the GPU; if the node reports the GPU busy, check the driver and the DDA assignment |
 
-## 6. Production gaps and open questions
+## 6. Alignment with the RaaS target architecture and with LocalBox AKS
+
+Two references were reviewed after the POC: the LocalBox AKS guide
+([Azure/arc_jumpstart_docs](https://github.com/Azure/arc_jumpstart_docs/blob/main/docs/azure_jumpstart_localbox/AKS/_index.md))
+and the private working repo `dorianb04/raas-azure-local-docs` (target architecture, "architecture pas à pas").
+
+**Consistent with the POC**
+
+- Kueue with `kueue.x-k8s.io/v1beta2`, one ClusterQueue per team and a LocalQueue per namespace.
+- GPU placement by `nvidia.com/gpu` requests; Slurm-style jobs become ordinary Kubernetes Jobs with the label
+  `kueue.x-k8s.io/queue-name` and `max-exec-time-seconds` as the equivalent of `--time`.
+- Qwen-VL as the OCR vision-language model (the target uses Qwen3-VL served by vLLM; the POC uses Qwen2.5-VL-3B
+  with llama.cpp because it runs on CPU).
+
+**Differences to settle with the customer** (the target repo is the reference; the POC is a Slurm-centred variant)
+
+| Topic | RaaS target | This POC |
+|-------|-------------|----------|
+| Slurm ↔ Kueue | **No bridge**: Slurm keeps the 4×H100 HPC nodes; the platform offers `raas run/status/cancel` (a generated Kubernetes Job) as the "sbatch" of Azure Local | Slurm proxy job creates the Kueue Job, to keep `sbatch` as the only entry point for OCR |
+| OCR scheduling | Opportunistic: ClusterQueue `ocr` with nominal quota 0, borrowing in a cohort, PriorityClass `ocr-opportuniste` with `preemptionPolicy: Never`; KEDA scales workers on RabbitMQ; no fixed night window (night = most GPUs idle) | Fixed night window with `stopPolicy` CronJobs; fixed quota |
+| Preemption | OCR pods are evicted when a Studio or job reclaims its guaranteed GPU; RabbitMQ replays unacknowledged messages | Nothing preempts: jobs are admitted only if quota is free |
+| GPUs | 4 Dell nodes × 2 RTX PRO 6000 = 8 GPU, 3 AKS Arc clusters, Azure Local 2610+ | 8 simulated GPUs on one k3s VM |
+| Images and data | Harbor registry, Isilon PVC, UID/GID of the HPC account | hostPath and NFS |
+
+Recommendation: keep the Slurm proxy only if the customer insists that OCR is submitted through Slurm. In that
+case combine both designs: put the proxy's Jobs in the opportunistic `ocr` ClusterQueue (nominal quota 0,
+`PriorityClass` with `preemptionPolicy: Never`) instead of the fixed window, and make the OCR script restartable
+so an eviction only costs the current document. Otherwise follow the target (RabbitMQ + KEDA, no bridge).
+
+**Use the real AKS Arc simulation next.** LocalBox ships a script that creates a real AKS Arc cluster on the
+nested Azure Local (`C:\LocalBox\Configure-AksWorkloadCluster.ps1` on `LocalBox-Client`: network
+`10.10.0.0/24`, VLAN 110, cluster `localbox-aks`, Entra group for access). Replace the k3s VM with it and reach
+it from the gateway with `az connectedk8s proxy -n localbox-aks -g <rg>`. The Kueue manifests and the proxy do
+not change; only the kubeconfig and the GPU resource (still simulated, there is no GPU in the nested hosts) do.
+Check the nested hosts have enough RAM left first (AKS Arc adds control-plane and worker VMs).
+
+## 7. Production gaps and open questions
 
 - Real GPU run: not tested (no GPU in the POC). Needs `GPU_LAYERS` tuning and memory sizing with the real model.
 - Slurm accounting shows the proxy job (one CPU), not the GPU hours. Use Kueue/Prometheus for GPU accounting.
