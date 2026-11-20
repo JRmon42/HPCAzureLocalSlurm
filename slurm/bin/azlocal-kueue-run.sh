@@ -77,7 +77,13 @@ PY
 [[ -s "/tmp/$NAME.json" ]] || { echo "kueue-run: cannot build the job manifest" >&2; exit 70; }
 
 echo "$(ts) Slurm job $JOBID -> Kubernetes job $NS/$NAME (LocalQueue $QUEUE, cpu=$CPU mem=$MEM gpu=$GPU)"
-kubectl apply -f "/tmp/$NAME.json" || exit 70
+# The Kubernetes API or the Kueue webhook can be briefly unavailable (node restart): retry for up to 10 minutes
+for try in $(seq 1 40); do
+  kubectl apply -f "/tmp/$NAME.json" && break
+  [[ $try == 40 ]] && { echo "$(ts) Kubernetes/Kueue not available, giving up" >&2; exit 70; }
+  echo "$(ts) Kubernetes/Kueue not ready yet, retrying in 15s ($try/40)" >&2
+  sleep 15 & wait $!
+done
 rm -f "/tmp/$NAME.json"
 
 last=""

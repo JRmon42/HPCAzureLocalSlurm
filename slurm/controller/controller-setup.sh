@@ -30,6 +30,11 @@ GW_MEMORY="${GW_MEMORY:-$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) / 1024 -
 INSTALL_DIR=/opt/azlocal-slurm
 CONF_DIR=/etc/azlocal-slurm
 
+# Long-lived VM: keep the static IP written at first boot. Without this, cloud-init can treat a later
+# boot as a new instance (no datasource found), rewrite netplan to DHCP and leave the VM without IPv4.
+echo "==> Freezing the network configuration"
+echo 'network: {config: disabled}' >/etc/cloud/cloud.cfg.d/99-azlocal-keep-network.cfg
+
 echo "==> Installing azlocal-slurm programs"
 mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/etc" "$CONF_DIR/ssh" /var/log/slurm /var/spool/slurmctld
 install -m 0755 "$BUNDLE_DIR"/bin/*.sh "$INSTALL_DIR/bin/"

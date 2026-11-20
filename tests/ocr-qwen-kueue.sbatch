@@ -14,5 +14,5 @@ OUT=/ocr/out/$SLURM_JOB_ID
 echo "Slurm job $SLURM_JOB_ID on $(hostname) - submitting to Kueue"
 /opt/azlocal-slurm/bin/azlocal-kueue-run.sh --queue ocr-queue --cpu 3 --mem 9Gi --gpu 1 --timeout 14400 \
   --env OUT_DIR="$OUT" --env GPU_LAYERS="${GPU_LAYERS:-0}" -- bash /ocr/bin/qwen-ocr.sh
-echo "Results in /shared${OUT#/ocr}"
-ls -l "/shared${OUT#/ocr}"
+echo "Results in /shared/ocr${OUT#/ocr}"
+ls -l "/shared/ocr${OUT#/ocr}"

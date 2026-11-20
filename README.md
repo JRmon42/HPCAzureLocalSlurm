@@ -35,6 +35,7 @@ in Azure.
 | [08 – OCR GPU night window](docs/08-ocr-gpu-night-window.md) | Customer answers, night-window design, **what is implemented / simulated / missing**, production how-to |
 | [09 – Slurm + Kueue + Qwen-VL](docs/09-slurm-kueue-qwen.md) | OCR job submitted with Slurm and admitted by Kueue on Kubernetes (k3s in the POC, AKS Arc in production): diagram, test results, **prerequisites and customer steps** |
 | [Demo guide (Word)](Demo-Guide-Azure-Local-Slurm.docx) | Step-by-step customer demo script |
+| [Run the Slurm + Kueue OCR test (Word)](Run-the-Slurm-Kueue-OCR-test-bash.docx) | Run the POC yourself from **bash** (Git Bash in VS Code) with `demo/demo.sh` and see the jobs running ([previous PowerShell version](Run-the-Slurm-Kueue-OCR-test.docx)) |
 
 ## Repository layout
 
@@ -67,7 +68,22 @@ slurm/
 k8s/                          k3s + Kueue setup, queues, night-window CronJobs, Qwen-VL OCR script
 tests/                        hello + MPI + OCR demo jobs, Qwen-VL/Kueue job and samples, e2e-test.sh
 docs/                         documentation and diagrams
+demo/demo.sh                  bash demo driver (start/stop the POC, submit OCR jobs, watch Slurm + Kueue, logs, results)
 ```
+
+## Run the demo from bash (POC already deployed)
+
+```bash
+az login --tenant <tenant> && az account set -s <sub>
+bash demo/demo.sh start      # starts LocalBox-Client, the nested hosts, waits for Arc (15-30 min)
+bash demo/demo.sh health     # Slurm partitions, Kubernetes node, Kueue queues, simulated GPUs
+bash demo/demo.sh submit     # sbatch the Qwen-VL OCR job (partition k8s -> Kueue)
+bash demo/demo.sh watch      # Slurm queue + Kueue workloads + pods every 60 s
+bash demo/demo.sh log 1; bash demo/demo.sh result 1
+bash demo/demo.sh stop       # deallocate the host VM (saves cost)
+```
+
+`bash demo/demo.sh help` lists all the commands (quota test, night window, cancel, describe, run).
 
 ## Quick start
 

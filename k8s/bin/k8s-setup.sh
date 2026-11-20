@@ -14,6 +14,10 @@ GPU_MODEL="${GPU_MODEL:-rtx6000}"
 KUEUE_VERSION="${KUEUE_VERSION:-}"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
+# Long-lived VM: keep the static IP written at first boot (see controller-setup.sh)
+echo "==> Freezing the network configuration"
+echo 'network: {config: disabled}' >/etc/cloud/cloud.cfg.d/99-azlocal-keep-network.cfg
+
 echo "==> /shared (NFS from the Slurm controller)"
 apt-get install -y -q nfs-common >/dev/null 2>&1 || true
 mkdir -p /shared

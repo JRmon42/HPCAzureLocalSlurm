@@ -124,6 +124,8 @@ the Kueue reason (quota, window). Set `--timeout` (becomes `activeDeadlineSecond
 | Cancel | `scancel <jobid>` (the proxy deletes the Kubernetes Job) |
 | Release stuck GPU | Pod deleted → device plugin frees the GPU; if the node reports the GPU busy, check the driver and the DDA assignment |
 
+In the POC, all these actions are wrapped by [`demo/demo.sh`](../demo/demo.sh) (bash, runs from Git Bash in VS Code, WSL, Linux or Cloud Shell through Azure Arc Run Command): `health`, `submit [n]`, `jobs`, `watch`, `log N`, `result N`, `describe N`, `cancel N`, `window-close`, `window-open`, `window`. Slurm accounting is not enabled in the POC, so use `squeue -t all`, `scontrol show job N` (about 5 min after the end) or the job log instead of `sacct`.
+
 ## 6. Alignment with the RaaS target architecture and with LocalBox AKS
 
 Two references were reviewed after the POC: the LocalBox AKS guide
